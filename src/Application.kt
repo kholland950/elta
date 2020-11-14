@@ -55,19 +55,19 @@ fun Application.module(testing: Boolean = false) {
         header("X-Engine", "Ktor") // will send this header with each response
     }
 
-    install(HSTS) {
-        includeSubDomains = true
-    }
+    // install(HSTS) {
+    //     includeSubDomains = true
+    // }
 
     // https://ktor.io/servers/features/https-redirect.html#testing
-    if (!testing) {
-        install(HttpsRedirect) {
-            // The port to redirect to. By default 443, the default HTTPS port.
-            sslPort = 443
-            // 301 Moved Permanently, or 302 Found redirect.
-            permanentRedirect = true
-        }
-    }
+    // if (!testing) {
+    //     install(HttpsRedirect) {
+    //         // The port to redirect to. By default 443, the default HTTPS port.
+    //         sslPort = 443
+    //         // 301 Moved Permanently, or 302 Found redirect.
+    //         permanentRedirect = true
+    //     }
+    // }
 
     install(io.ktor.websocket.WebSockets) {
         pingPeriod = Duration.ofSeconds(15)
