@@ -78,11 +78,7 @@ fun Application.module(testing: Boolean = false) {
 
     routing {
         get("/") {
-            call.respondText("HELLO WORLD!", contentType = ContentType.Text.Plain)
-        }
-
-        get("/html-mustache") {
-            call.respond(MustacheContent("index.hbs", mapOf("user" to MustacheUser(1, "user1"))))
+            call.respond(MustacheContent("index.hbs", mapOf("user" to MustacheUser(1, "user man"))))
         }
 
         // Static feature. Try to access `/static/ktor_logo.svg`

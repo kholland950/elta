@@ -8,13 +8,13 @@ buildscript {
     }
 
     dependencies {
-        classpath("com.moowork.gradle:gradle-node-plugin:1.2.0")
+        classpath("com.github.node-gradle:gradle-node-plugin:2.2.4")
     }
 }
 
 plugins {
     base
-    id("com.moowork.node") version "1.2.0" // gradle-node-plugin
+    id("com.github.node-gradle.node") version "2.2.4"
 }
 
 node {
@@ -28,7 +28,7 @@ node {
     version = "15.2.0"
 
     // Version of npm to use.
-    npmVersion = "7.0.8"
+    npmVersion = ""
 
     // If true, it will download node using above parameters.
     // If false, it will try to use globally installed node.
@@ -77,32 +77,6 @@ tasks.assemble {
     dependsOn(packageFrontend)
 }
 
-val testsExecutedMarkerName: String = "${projectDir}/.tests.executed"
-
-val test by tasks.registering(NpmTask::class) {
-    dependsOn("assemble")
-
-    // force Jest test runner to execute tests once and finish the process instead of starting watch mode
-    setEnvironment(mapOf("CI" to "true"))
-
-    setArgs(listOf("run", "test"))
-
-    inputs.files(fileTree("src"))
-    inputs.file("package.json")
-    inputs.file("package-lock.json")
-
-    // allows easy triggering re-tests
-    doLast {
-        File(testsExecutedMarkerName).appendText("delete this file to force re-execution JavaScript tests")
-    }
-    outputs.file(testsExecutedMarkerName)
-}
-
-tasks.check {
-    dependsOn(test)
-}
-
 tasks.clean {
     delete(packageFrontend.get().archivePath)
-    delete(testsExecutedMarkerName)
 }

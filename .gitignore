@@ -5,3 +5,10 @@
 *.iml
 *.ipr
 *.iws
+
+**/.gradle
+
+frontend/node_modules
+**/build
+frontend/build_packageFrontend
+
