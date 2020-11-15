@@ -17,10 +17,8 @@ export class GameScene extends Phaser.Scene {
   public update() {
     const cursorKeys = this.input.keyboard.createCursorKeys();
 
-    if (cursorKeys.up.isDown) {
-      this.square.body.setVelocityY(-500);
-    } else if (cursorKeys.down.isDown) {
-      this.square.body.setAccelerationY(500);
+    if (Phaser.Input.Keyboard.JustDown(cursorKeys.space)) {
+      this.square.body.setVelocityY(-1000);
     } else {
       this.square.body.setAccelerationY(0);
     }
