@@ -12,6 +12,7 @@ export class GameScene extends Phaser.Scene {
     this.physics.add.existing(this.square);
     this.square.body.setDrag(500, 300);
     this.square.body.setCollideWorldBounds(true);
+    this.square.body.setBounce(1, 1)
   }
 
   public update() {
