@@ -1,35 +1,58 @@
-import 'phaser'
+import 'phaser';
 
 export class GameScene extends Phaser.Scene {
-  private square: Phaser.GameObjects.Rectangle & { body: Phaser.Physics.Arcade.Body };
+  private player: Phaser.GameObjects.Sprite & { body: Phaser.Physics.Arcade.Body };
+  private particles: Phaser.GameObjects.Particles.ParticleEmitterManager;
 
   constructor() {
     super(sceneConfig);
   }
 
   public create() {
-    this.square = this.add.rectangle(400, 400, 100, 100, 0xFFFFFF) as any;
-    this.physics.add.existing(this.square);
-    this.square.body.setDrag(500, 300);
-    this.square.body.setCollideWorldBounds(true);
-    this.square.body.setBounce(1, 1)
+    this.particles = this.add.particles('Blue')
+
+    this.particles.createEmitter({lifespan: 300, gravityY: 2000, blendMode: 'SCREEN', scale: { start: 0.3, end: 0.2 }, on: false })
+
+    this.player = this.add.sprite(400, 400, 'Blue') as any;
+    this.player.setScale(0.4)
+    this.player.setTint(0xFFFFFFFF)
+    this.physics.add.existing(this.player);
+    this.player.body.setCircle(125, 70, 70)
+    this.player.body.setDrag(500, 300);
+    this.player.body.setCollideWorldBounds(true);
+    this.player.body.setBounce(.4, .4)
+    this.player.body.setMaxSpeed(2000)
+
+  }
+
+  public preload() {
+    const colors = ['Blue', 'Green', 'Orange', 'Red', 'Violet', 'Yellow']
+    colors.forEach(color => this.load.image(color, `assets/${color}Light.png`))
   }
 
   public update() {
-    const cursorKeys = this.input.keyboard.createCursorKeys();
+    const keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
+    const keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
+    const keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
+    const keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
+    const space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
-    if (Phaser.Input.Keyboard.JustDown(cursorKeys.space)) {
-      this.square.body.setVelocityY(-1000);
-    } else {
-      this.square.body.setAccelerationY(0);
+    if (Math.abs(this.player.body.velocity.x) > 10 || Math.abs(this.player.body.velocity.y) > 10) {
+      this.particles.emitParticleAt(this.player.x, this.player.y, 1)
     }
 
-    if (cursorKeys.right.isDown) {
-      this.square.body.setAccelerationX(800);
-    } else if (cursorKeys.left.isDown) {
-      this.square.body.setAccelerationX(-800);
+    if (Phaser.Input.Keyboard.JustDown(space)) {
+      this.player.body.setVelocityY(-1000);
     } else {
-      this.square.body.setAccelerationX(0);
+      this.player.body.setAccelerationY(0);
+    }
+
+    if (keyD.isDown) {
+      this.player.body.setAccelerationX(1200);
+    } else if (keyA.isDown) {
+      this.player.body.setAccelerationX(-1200);
+    } else {
+      this.player.body.setAccelerationX(0);
     }
   }
 }
@@ -47,7 +70,7 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   physics: {
     default: 'arcade',
     arcade: {
-      debug: true,
+      // debug: true,
       gravity: { x: 0, y: 2000 },
     },
   },
@@ -65,29 +88,3 @@ const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
 };
 
 const game = new Phaser.Game(gameConfig);
-
-// let game = new Phaser.Game(config)
-
-// function preload() {
-
-// }
-
-// function create() {
-//   // this.add.image(400, 300, 'sky');
-
-//   var particles = this.add.particles('red');
-
-//   var emitter = particles.createEmitter({
-//     speed: 100,
-//     scale: { start: 1, end: 0 },
-//     blendMode: 'ADD'
-//   });
-
-//   var logo = this.physics.add(400, 100, 'logo');
-
-//   logo.setVelocity(100, 200);
-//   logo.setBounce(1, 1);
-//   logo.setCollideWorldBounds(true);
-
-//   emitter.startFollow(logo);
-// }
