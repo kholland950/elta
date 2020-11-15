@@ -18,7 +18,7 @@ export class GameScene extends Phaser.Scene {
     const cursorKeys = this.input.keyboard.createCursorKeys();
 
     if (cursorKeys.up.isDown) {
-      this.square.body.setAccelerationY(-5000);
+      this.square.body.setVelocityY(-500);
     } else if (cursorKeys.down.isDown) {
       this.square.body.setAccelerationY(500);
     } else {
