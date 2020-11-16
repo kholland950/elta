@@ -6,7 +6,7 @@ const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = 
     on: false
 }
 
-type Player = {
+interface Player {
     sprite: Phaser.GameObjects.Sprite & { body: Phaser.Physics.Arcade.Body }
     text: Phaser.GameObjects.Text
     isLocal: boolean
