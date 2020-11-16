@@ -95,7 +95,6 @@ fun Application.module(testing: Boolean = false) {
         webSocket("/ws/game") {
             send(Frame.Text("Hi from server"))
             while (true) {
-                Json.decodeFromString()
                 val frame = incoming.receive()
                 if (frame is Frame.Text) {
                     send(Frame.Text("Client said: " + frame.readText()))
