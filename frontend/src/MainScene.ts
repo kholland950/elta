@@ -11,7 +11,6 @@ export class MainScene extends Phaser.Scene {
 
     constructor() {
         super(sceneConfig)
-        this.playerManager = new PlayerManager(this)
     }
 
     public preload() {
@@ -20,6 +19,7 @@ export class MainScene extends Phaser.Scene {
     }
 
     public create() {
+        this.playerManager = new PlayerManager(this)
         this.playerManager.addPlayer('Blue', 'player1', true)
         this.playerManager.addPlayer('Green', 'player2')
     }

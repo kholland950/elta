@@ -76,7 +76,7 @@ export class PlayerManager {
 
                 if (this.controls.right.isDown) {
                     player.sprite.body.setAccelerationX(1200);
-                } else if (this.controls.right.isDown) {
+                } else if (this.controls.left.isDown) {
                     player.sprite.body.setAccelerationX(-1200);
                 } else {
                     player.sprite.body.setAccelerationX(0);
