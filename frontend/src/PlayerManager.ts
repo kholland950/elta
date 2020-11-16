@@ -1,5 +1,5 @@
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
-    lifespan: 300,
+    lifespan: 3000,
     gravityY: 2000,
     blendMode: 'SCREEN',
     scale: { start: 0.3, end: 0.2 },
@@ -16,7 +16,7 @@ interface Player {
 
 export class PlayerManager {
     private players: Array<Player> = []
-    private scene: Phaser.Scene
+    private scene: Phaser.Scene & { socket: WebSocket }
     private controls: {
         left: Phaser.Input.Keyboard.Key
         right: Phaser.Input.Keyboard.Key
@@ -24,7 +24,7 @@ export class PlayerManager {
     }
 
     constructor(scene: Phaser.Scene) {
-        this.scene = scene
+        this.scene = scene as any
         this.controls = {
             left: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
             right: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
@@ -55,10 +55,27 @@ export class PlayerManager {
         player.text = this.scene.add.text(player.sprite.x - 50, player.sprite.y - 50, name, { fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' })
 
         this.players.push(player)
+
+        if (player.isLocal) {
+            this.scene.socket.send(JSON.stringify({ event: 'newPlayer', color, name }))
+            setInterval(this.sendPlayerPosition, 100, this.scene, player)
+        }
+    }
+
+    private sendPlayerPosition(scene: Phaser.Scene & { socket: WebSocket }, player: Player) {
+        scene.socket.send(JSON.stringify({ x: player.sprite.x, y: player.sprite.y }))
+    }
+
+    public playerMoved(data: any) {
+        const playerUpdated = this.players.find(player => player.name === data.name)
+        if (playerUpdated) {
+            playerUpdated.sprite.x = data.x
+            playerUpdated.sprite.y = data.y
+        }
     }
 
     public update() {
-        this.scene.physics.collide(this.players[0].sprite, this.players[1].sprite)
+        // this.scene.physics.collide(this.players[0].sprite, this.players[1].sprite)
 
         this.players.forEach(player => {
             player.text.setPosition(player.sprite.x - 25, player.sprite.y - 100)
