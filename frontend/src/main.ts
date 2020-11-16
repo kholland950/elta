@@ -22,7 +22,6 @@ export class GameScene extends Phaser.Scene {
     this.player.body.setCollideWorldBounds(true);
     this.player.body.setBounce(.4, .4)
     this.player.body.setMaxSpeed(2000)
-
   }
 
   public preload() {
@@ -32,9 +31,7 @@ export class GameScene extends Phaser.Scene {
 
   public update() {
     const keyA = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-    const keyS = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.S);
     const keyD = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-    const keyW = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.W);
     const space = this.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
 
     if (Math.abs(this.player.body.velocity.x) > 10 || Math.abs(this.player.body.velocity.y) > 10) {
@@ -87,4 +84,4 @@ const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
   key: 'Game',
 };
 
-const game = new Phaser.Game(gameConfig);
+new Phaser.Game(gameConfig);

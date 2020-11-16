@@ -1,0 +1,36 @@
+{
+  "compilerOptions": {
+    "target": "es5",
+    "moduleResolution": "node",
+    "noImplicitAny": true,
+    "alwaysStrict": true,
+    "experimentalDecorators": true,
+    "module": "es2015",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "noEmitOnError": false,
+    "jsx": "react",
+    "strict": true,
+    "baseUrl": "src",
+    "rootDirs": [
+      "src"
+    ],
+    "noUnusedLocals": true,
+    "strictPropertyInitialization": false,
+    "noEmit": true,
+    "noUnusedParameters": true,
+    "pretty": true,
+    "preserveConstEnums": true,
+    "stripInternal": true,
+    "typeRoots": [
+        "src/types",
+        "node_modules/@types"
+    ]
+  },
+  "include": [
+    "./src/**/*"
+  ],
+  "exclude": [
+    "node_modules"
+  ],
+}
