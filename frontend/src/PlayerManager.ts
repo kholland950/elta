@@ -1,4 +1,3 @@
-
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
     lifespan: 300,
     gravityY: 2000,
@@ -18,13 +17,22 @@ type Player = {
 export class PlayerManager {
     private players: Array<Player> = []
     private scene: Phaser.Scene
+    private controls: {
+        left: Phaser.Input.Keyboard.Key
+        right: Phaser.Input.Keyboard.Key
+        jump: Phaser.Input.Keyboard.Key
+    }
 
     constructor(scene: Phaser.Scene) {
         this.scene = scene
+        this.controls = {
+            left: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+            right: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+            jump: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+        }
     }
 
     public addPlayer(color: string, name: string, isLocal: boolean = false) {
-
         const player: Player = { particles: this.scene.add.particles(color) } as any
         player.particles.createEmitter(emitterConfig)
 
@@ -50,10 +58,6 @@ export class PlayerManager {
     }
 
     public update() {
-        const keyA = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A);
-        const keyD = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D);
-        const space = this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE);
-
         this.scene.physics.collide(this.players[0].sprite, this.players[1].sprite)
 
         this.players.forEach(player => {
@@ -64,15 +68,15 @@ export class PlayerManager {
                     player.particles.emitParticleAt(player.sprite.x, player.sprite.y, 1)
                 }
 
-                if (Phaser.Input.Keyboard.JustDown(space)) {
+                if (Phaser.Input.Keyboard.JustDown(this.controls.jump)) {
                     player.sprite.body.setVelocityY(-1000);
                 } else {
                     player.sprite.body.setAccelerationY(0);
                 }
 
-                if (keyD.isDown) {
+                if (this.controls.right.isDown) {
                     player.sprite.body.setAccelerationX(1200);
-                } else if (keyA.isDown) {
+                } else if (this.controls.right.isDown) {
                     player.sprite.body.setAccelerationX(-1200);
                 } else {
                     player.sprite.body.setAccelerationX(0);
