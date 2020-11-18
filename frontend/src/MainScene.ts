@@ -21,7 +21,8 @@ export class MainScene extends Phaser.Scene {
     public preload() {
         const colors = ['Blue', 'Green', 'Orange', 'Red', 'Violet', 'Yellow']
         colors.forEach(color => this.load.image(color, `assets/${color}Light.png`))
-        this.socket = new WebSocket('ws://localhost:3000/ws/game')
+
+        this.socket = new WebSocket(`ws://${location.host}/ws/game`)
 
         this.socket.onmessage = event => {
             const message = JSON.parse(event.data)
