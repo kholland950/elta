@@ -1,8 +1,8 @@
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
-    lifespan: 3000,
+    lifespan: 1000,
     gravityY: 2000,
     blendMode: 'SCREEN',
-    scale: { start: 0.3, end: 0.2 },
+    scale: { start: 0.1, end: 0 },
     on: false
 }
 
@@ -70,7 +70,7 @@ export class PlayerManager {
         player.name = name
         player.color = color
 
-        player.sprite.setScale(0.4)
+        player.sprite.setScale(0.1)
         player.sprite.setTint(0xFFFFFFFF)
 
         this.scene.physics.add.existing(player.sprite)
@@ -82,7 +82,7 @@ export class PlayerManager {
         player.sprite.body.setBounce(.4, .4)
         player.sprite.body.setMaxSpeed(2000)
 
-        player.text = this.scene.add.text(player.sprite.x - 50, player.sprite.y - 50, name, { fontFamily: 'Georgia, "Goudy Bookletter 1911", Times, serif' })
+        player.text = this.scene.add.text(player.sprite.x - 50, player.sprite.y - 50, name, { fontFamily: 'sans-serif' })
 
         if (isLocal) {
             this.addLocalPlayer(player)
@@ -153,9 +153,9 @@ export class PlayerManager {
         }
 
         if (this.controls.right.isDown) {
-            this.localPlayer.sprite.body.setAccelerationX(1200);
+            this.localPlayer.sprite.body.setAccelerationX(3000);
         } else if (this.controls.left.isDown) {
-            this.localPlayer.sprite.body.setAccelerationX(-1200);
+            this.localPlayer.sprite.body.setAccelerationX(-3000);
         } else {
             this.localPlayer.sprite.body.setAccelerationX(0);
         }
