@@ -4,11 +4,9 @@ import io.ktor.application.*
 import io.ktor.response.*
 import io.ktor.request.*
 import io.ktor.routing.*
-import io.ktor.http.*
 import com.github.mustachejava.DefaultMustacheFactory
 import io.ktor.mustache.Mustache
 import io.ktor.mustache.MustacheContent
-import io.ktor.content.*
 import io.ktor.http.content.*
 import io.ktor.locations.*
 import io.ktor.sessions.*
@@ -16,6 +14,9 @@ import io.ktor.features.*
 import org.slf4j.event.*
 import io.ktor.websocket.*
 import io.ktor.http.cio.websocket.*
+import kotlinx.coroutines.channels.ClosedReceiveChannelException
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 import java.time.*
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -93,12 +94,19 @@ fun Application.module(testing: Boolean = false) {
         }
 
         webSocket("/ws/game") {
-            send(Frame.Text("Hi from server"))
-            while (true) {
-                val frame = incoming.receive()
-                if (frame is Frame.Text) {
-                    send(Frame.Text("Client said: " + frame.readText()))
+//            send(Frame.Text("Hi from server"))
+
+            MessageBroker.add(this)
+
+            try {
+                while (true) {
+                    val frame = incoming.receive()
+                    if (frame is Frame.Text) {
+                        MessageBroker.receive(frame.readText(), this)
+                    }
                 }
+            } catch (e: ClosedReceiveChannelException) {
+                MessageBroker.remove(this)
             }
         }
     }
@@ -107,4 +115,3 @@ fun Application.module(testing: Boolean = false) {
 data class MustacheUser(val id: Int, val name: String)
 
 data class MySession(val count: Int = 0)
-

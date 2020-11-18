@@ -6,6 +6,10 @@ const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
     key: 'Game',
 };
 
+function ID () {
+  return '_' + Math.random().toString(36).substr(2, 9);
+};
+
 export class MainScene extends Phaser.Scene {
     private playerManager: PlayerManager
     private socket: WebSocket
@@ -20,13 +24,15 @@ export class MainScene extends Phaser.Scene {
         this.socket = new WebSocket('ws://localhost:3000/ws/game')
 
         this.socket.onmessage = event => {
-            console.log(event.data)
-            // const data = JSON.parse(event.data)
-            const data = {}
-            if (data.event === 'newPlayer') {
-                this.playerManager.addPlayer(data.color, data.name)
-            } else if (data.event === 'playerMove') {
-                this.playerManager.playerMoved(data)
+            const message = JSON.parse(event.data)
+            if (message.event === 'newPlayer') {
+                this.playerManager.addPlayer(message.data)
+            } else if (message.event === 'playerMove') {
+                this.playerManager.playerMoved(message.data)
+            } else if (message.event === 'gameState') {
+                this.playerManager.updateGameState(message.data)
+            } else if (message.event === 'playerLeft') {
+                this.playerManager.playerLeft(message.data)
             }
         }
     }
@@ -34,7 +40,14 @@ export class MainScene extends Phaser.Scene {
     public create() {
         this.playerManager = new PlayerManager(this)
         const [color, name] = window.location.hash.slice(1).split(',')
-        this.playerManager.addPlayer(color, name, true)
+        this.playerManager.addPlayer({
+            id: ID(),
+            color,
+            name,
+            isLocal: true,
+            x: 400,
+            y: 400
+        })
     }
 
     public update() {
