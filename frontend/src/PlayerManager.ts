@@ -1,5 +1,5 @@
 import { MainScene } from 'MainScene'
-import { MessageEventType, NewPlayerMessage, PlayerData, PlayerMoveMessage } from 'messages'
+import { MessageEventType, NewPlayerMessage, PlayerDataMessage, PlayerMoveMessage } from 'messages'
 
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
     lifespan: 1000,
@@ -130,7 +130,7 @@ export class PlayerManager {
         player.sprite.body.setMaxSpeed(playerConfig.physics.maxSpeed)
     }
 
-    public updateGameState(players: Array<PlayerData>) {
+    public updateGameState(players: Array<PlayerDataMessage>) {
         players?.forEach(player => {
             if (!this.remotePlayers.find(p => p.id === player.id)) {
                 this.addPlayer(player.color, player.name, false, 0, 0, player.id)

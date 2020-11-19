@@ -1,10 +1,12 @@
 export const TPS: number = 32
 
-export interface NewPlayerMessage {
-    id: string,
-    color: string,
+export interface PlayerDataMessage {
+    id: string
+    color: string
     name: string
 }
+
+export type NewPlayerMessage = PlayerDataMessage
 
 export interface PlayerMoveMessage {
     playerId: string,
@@ -14,14 +16,8 @@ export interface PlayerMoveMessage {
     velocityY: number
 }
 
-export interface PlayerData {
-    id: string
-    color: string
-    name: string
-}
-
 export interface GameStateMessage {
-    players: Array<PlayerData>
+    players: Array<PlayerDataMessage>
 }
 
 export interface PlayerLeftMessage {
