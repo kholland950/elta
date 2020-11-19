@@ -45,17 +45,26 @@ export class PlayerManager {
     private localPlayer: Player
     private scene: MainScene
     private controls: {
-        left: Phaser.Input.Keyboard.Key
-        right: Phaser.Input.Keyboard.Key
-        jump: Phaser.Input.Keyboard.Key
+        left: Array<Phaser.Input.Keyboard.Key>
+        right: Array<Phaser.Input.Keyboard.Key>
+        jump: Array<Phaser.Input.Keyboard.Key>
     }
 
     constructor(scene: MainScene) {
         this.scene = scene as any
         this.controls = {
-            left: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-            right: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-            jump: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+            left: [
+                this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+                this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A)
+            ],
+            right: [
+                this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+                this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D)
+            ],
+            jump: [
+                this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+                this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
+            ],
         }
     }
 
@@ -182,19 +191,31 @@ export class PlayerManager {
         this.remotePlayers.forEach(player => this.updatePlayer(player))
 
         //controls
-        if (Phaser.Input.Keyboard.JustDown(this.controls.jump)) {
+        if (this.jump()) {
             this.localPlayer.sprite.body.setVelocityY(-playerConfig.physics.jumpVelocity);
         } else {
             this.localPlayer.sprite.body.setAccelerationY(0);
         }
 
-        if (this.controls.right.isDown) {
+        if (this.right()) {
             this.localPlayer.sprite.body.setAccelerationX(playerConfig.physics.acceleration);
-        } else if (this.controls.left.isDown) {
+        } else if (this.left()) {
             this.localPlayer.sprite.body.setAccelerationX(-playerConfig.physics.acceleration);
         } else {
             this.localPlayer.sprite.body.setAccelerationX(0);
         }
+    }
+
+    private jump() {
+        return this.controls.jump.some(key => Phaser.Input.Keyboard.JustDown(key))
+    }
+
+    private left() {
+        return this.controls.left.some(key => key.isDown)
+    }
+
+    private right() {
+        return this.controls.right.some(key => key.isDown)
     }
 
     private updatePlayer(player: Player) {
