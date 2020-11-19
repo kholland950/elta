@@ -1,3 +1,6 @@
+import { MainScene } from 'MainScene'
+import { MessageEventType, NewPlayerMessage, PlayerData, PlayerMoveMessage } from 'messages'
+
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
     lifespan: 1000,
     gravityY: 2000,
@@ -24,7 +27,7 @@ const playerConfig = {
     }
 }
 
-interface Player {
+export interface Player {
     sprite: Phaser.GameObjects.Sprite & { body: Phaser.Physics.Arcade.Body }
     text: Phaser.GameObjects.Text
     id: string
@@ -40,14 +43,14 @@ let lastY: number = 0
 export class PlayerManager {
     private remotePlayers: Array<Player> = []
     private localPlayer: Player
-    private scene: Phaser.Scene & { socket: WebSocket }
+    private scene: MainScene
     private controls: {
         left: Phaser.Input.Keyboard.Key
         right: Phaser.Input.Keyboard.Key
         jump: Phaser.Input.Keyboard.Key
     }
 
-    constructor(scene: Phaser.Scene) {
+    constructor(scene: MainScene) {
         this.scene = scene as any
         this.controls = {
             left: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
@@ -58,15 +61,15 @@ export class PlayerManager {
 
     private addLocalPlayer(player: Player) {
         this.localPlayer = player
-        this.scene.socket.send(JSON.stringify({
-            event: 'newPlayer',
-            data: {
-                id: player.id,
-                color: player.color,
-                name: player.name
-            }
-        }))
-        setInterval(this.sendPlayerPosition, 1000/20, this.scene, player)
+        this.scene.messageBroker.send(
+            MessageEventType.NEW_PLAYER,
+            { id: player.id, color: player.color, name: player.name } as NewPlayerMessage
+        )
+        this.scene.messageBroker.schedule(
+            MessageEventType.PLAYER_MOVE,
+            this.getPlayerPosition,
+            player
+        )
     }
 
     private addRemotePlayer(player: Player) {
@@ -74,8 +77,12 @@ export class PlayerManager {
     }
 
     public addPlayer(
-        { id, color, name, isLocal, x, y}:
-        { id: string, color: string, name: string, isLocal: boolean, x: number, y: number }
+        color: string,
+        name: string,
+        isLocal: boolean,
+        x: number,
+        y: number,
+        id = PlayerManager.generatePlayerId()
     ) {
         const player: Player = {} as any
         player.id = id
@@ -123,45 +130,42 @@ export class PlayerManager {
         player.sprite.body.setMaxSpeed(playerConfig.physics.maxSpeed)
     }
 
-    public updateGameState(
-        { players }: { players: Array<any> }
-    ) {
+    public updateGameState(players: Array<PlayerData>) {
         players?.forEach(player => {
             if (!this.remotePlayers.find(p => p.id === player.id)) {
-                this.addPlayer({ ...player, isLocal: false })
+                this.addPlayer(player.color, player.name, false, 0, 0, player.id)
             }
         })
     }
 
-    private sendPlayerPosition(scene: Phaser.Scene & { socket: WebSocket }, player: Player) {
+    private getPlayerPosition(player: Player): PlayerMoveMessage | undefined {
+        let playerPostion: PlayerMoveMessage | undefined = undefined
         if (Math.abs(lastX - player.sprite.x) > 1 || Math.abs(lastY - player.sprite.y) > 1) {
-            scene.socket.send(JSON.stringify({
-                event: 'playerMove',
-                data: {
-                    playerId: player.id,
-                    x: player.sprite.x,
-                    y: player.sprite.y,
-                    velocityX: player.sprite.body.velocity.x,
-                    velocityY: player.sprite.body.velocity.y
-                }
-            }))
+            playerPostion = {
+                playerId: player.id,
+                x: player.sprite.x,
+                y: player.sprite.y,
+                velocityX: player.sprite.body.velocity.x,
+                velocityY: player.sprite.body.velocity.y
+            }
         }
         lastX = player.sprite.x
         lastY = player.sprite.y
+        return playerPostion
     }
 
-    public playerMoved(data: any) {
-        const playerUpdated = this.remotePlayers.find(player => player.id === data.playerId)
+    public playerMoved(id: string, x: number, y: number, velocityX: number, velocityY: number) {
+        const playerUpdated = this.remotePlayers.find(player => player.id === id)
         if (playerUpdated) {
-            playerUpdated.sprite.x = data.x
-            playerUpdated.sprite.y = data.y
-            playerUpdated.sprite.body.setVelocityX(data.velocityX)
-            playerUpdated.sprite.body.setVelocityY(data.velocityY)
+            playerUpdated.sprite.x = x
+            playerUpdated.sprite.y = y
+            playerUpdated.sprite.body.setVelocityX(velocityX)
+            playerUpdated.sprite.body.setVelocityY(velocityY)
         }
     }
 
-    public playerLeft(data: any) {
-        const playerToRemove = this.remotePlayers.find(player => player.id === data.playerId)
+    public playerLeft(id: string) {
+        const playerToRemove = this.remotePlayers.find(player => player.id === id)
         playerToRemove?.sprite.destroy()
         playerToRemove?.text.destroy()
 
@@ -198,5 +202,9 @@ export class PlayerManager {
         if (Math.abs(player.sprite.body.velocity.x) > 10 || Math.abs(player.sprite.body.velocity.y) > 10) {
             player.particles.emitParticleAt(player.sprite.x, player.sprite.y, 1)
         }
+    }
+
+    private static generatePlayerId(): string {
+        return '_' + Math.random().toString(36).substr(2, 9);
     }
 }

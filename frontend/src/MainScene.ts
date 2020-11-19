@@ -1,18 +1,15 @@
-import { PlayerManager } from './PlayerManager'
+import { MessageBroker } from 'MessageBroker'
+import { PlayerManager } from 'PlayerManager'
 
 const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
     active: false,
     visible: false,
     key: 'Game',
-};
-
-function ID () {
-  return '_' + Math.random().toString(36).substr(2, 9);
-};
+}
 
 export class MainScene extends Phaser.Scene {
-    private playerManager: PlayerManager
-    private socket: WebSocket
+    playerManager: PlayerManager
+    messageBroker: MessageBroker
 
     constructor() {
         super(sceneConfig)
@@ -21,34 +18,19 @@ export class MainScene extends Phaser.Scene {
     public preload() {
         const colors = ['Blue', 'Green', 'Orange', 'Red', 'Violet', 'Yellow']
         colors.forEach(color => this.load.image(color, `assets/${color}Light.png`))
-
-        this.socket = new WebSocket(`ws://${location.host}/ws/game`)
-
-        this.socket.onmessage = event => {
-            const message = JSON.parse(event.data)
-            if (message.event === 'newPlayer') {
-                this.playerManager.addPlayer(message.data)
-            } else if (message.event === 'playerMove') {
-                this.playerManager.playerMoved(message.data)
-            } else if (message.event === 'gameState') {
-                this.playerManager.updateGameState(message.data)
-            } else if (message.event === 'playerLeft') {
-                this.playerManager.playerLeft(message.data)
-            }
-        }
     }
 
     public create() {
         this.playerManager = new PlayerManager(this)
+        this.messageBroker = new MessageBroker(this)
         const [color, name] = window.location.hash.slice(1).split(',')
-        this.playerManager.addPlayer({
-            id: ID(),
+        this.playerManager.addPlayer(
             color,
             name,
-            isLocal: true,
-            x: 400,
-            y: 400
-        })
+            true,
+            400,
+            400,
+        )
     }
 
     public update() {
