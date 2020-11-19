@@ -6,6 +6,24 @@ const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = 
     on: false
 }
 
+const playerConfig = {
+    startingPosition: { x: 400, y: 400 },
+    scale: 0.1,
+    hitboxOffset: 125,
+    hitboxRadius: 70,
+    textStyle: {
+        fontFamily: 'sans-serif'
+    },
+    physics: {
+        friction: 800,
+        drag: 200,
+        bounce: .4,
+        maxSpeed: 2000,
+        acceleration: 3000,
+        jumpVelocity: 1000,
+    }
+}
+
 interface Player {
     sprite: Phaser.GameObjects.Sprite & { body: Phaser.Physics.Arcade.Body }
     text: Phaser.GameObjects.Text
@@ -38,7 +56,6 @@ export class PlayerManager {
         }
     }
 
-
     private addLocalPlayer(player: Player) {
         this.localPlayer = player
         this.scene.socket.send(JSON.stringify({
@@ -60,35 +77,50 @@ export class PlayerManager {
         { id, color, name, isLocal, x, y}:
         { id: string, color: string, name: string, isLocal: boolean, x: number, y: number }
     ) {
-
-        const player: Player = { particles: this.scene.add.particles(color) } as any
-        player.particles.createEmitter(emitterConfig)
-
-        player.sprite = this.scene.add.sprite(x || 400, y || 400, color) as any
+        const player: Player = {} as any
         player.id = id
         player.isLocal = isLocal
         player.name = name
         player.color = color
 
-        player.sprite.setScale(0.1)
-        player.sprite.setTint(0xFFFFFFFF)
+        this.createParticles(player)
 
-        this.scene.physics.add.existing(player.sprite)
+        this.createSprite(player, x, y)
 
-        player.sprite.body.setCircle(125, 70, 70)
-        player.sprite.body.setFriction(800, 800)
-        player.sprite.body.setDrag(200, 200)
-        player.sprite.body.setCollideWorldBounds(true)
-        player.sprite.body.setBounce(.4, .4)
-        player.sprite.body.setMaxSpeed(2000)
+        this.addPhysics(player)
 
-        player.text = this.scene.add.text(player.sprite.x - 50, player.sprite.y - 50, name, { fontFamily: 'sans-serif' })
-
+        player.text = this.scene.add.text(player.sprite.x - 50, player.sprite.y - 50, name, playerConfig.textStyle)
+        
         if (isLocal) {
             this.addLocalPlayer(player)
         } else {
             this.addRemotePlayer(player)
         }
+    }
+
+    private createParticles(player: Player) {
+        player.particles = this.scene.add.particles(player.color)
+        player.particles.createEmitter(emitterConfig)
+    }
+
+    private createSprite(player: Player, x: number, y: number) {
+        player.sprite = this.scene.add.sprite(
+            x || playerConfig.startingPosition.x,
+            y || playerConfig.startingPosition.y,
+            player.color) as any
+
+        player.sprite.setScale(playerConfig.scale)
+    }
+
+    private addPhysics(player: Player) {
+        this.scene.physics.add.existing(player.sprite)
+
+        player.sprite.body.setCircle(playerConfig.hitboxOffset, playerConfig.hitboxOffset, playerConfig.hitboxOffset)
+        player.sprite.body.setFriction(playerConfig.physics.friction, playerConfig.physics.friction)
+        player.sprite.body.setDrag(playerConfig.physics.drag, playerConfig.physics.drag)
+        player.sprite.body.setCollideWorldBounds(true)
+        player.sprite.body.setBounce(playerConfig.physics.bounce, playerConfig.physics.bounce)
+        player.sprite.body.setMaxSpeed(playerConfig.physics.maxSpeed)
     }
 
     public updateGameState(
@@ -147,15 +179,15 @@ export class PlayerManager {
 
         //controls
         if (Phaser.Input.Keyboard.JustDown(this.controls.jump)) {
-            this.localPlayer.sprite.body.setVelocityY(-1000);
+            this.localPlayer.sprite.body.setVelocityY(-playerConfig.physics.jumpVelocity);
         } else {
             this.localPlayer.sprite.body.setAccelerationY(0);
         }
 
         if (this.controls.right.isDown) {
-            this.localPlayer.sprite.body.setAccelerationX(3000);
+            this.localPlayer.sprite.body.setAccelerationX(playerConfig.physics.acceleration);
         } else if (this.controls.left.isDown) {
-            this.localPlayer.sprite.body.setAccelerationX(-3000);
+            this.localPlayer.sprite.body.setAccelerationX(-playerConfig.physics.acceleration);
         } else {
             this.localPlayer.sprite.body.setAccelerationX(0);
         }
