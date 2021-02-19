@@ -1,6 +1,7 @@
 # ktor/phaser game poc
 
 ## Run
+Backend
 CLI:
 ```
 ./gradlew
@@ -8,9 +9,11 @@ CLI:
 IntelliJ:
 Run `Application.kt`
 
+
 Frontend
 ```
 cd frontend
+npm install
 npm run dev
 ```
 
