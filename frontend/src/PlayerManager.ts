@@ -70,6 +70,7 @@ export class PlayerManager {
 
     private addLocalPlayer(player: Player) {
         this.localPlayer = player
+        this.scene.cameras.main.startFollow(this.localPlayer.sprite, false, 0.2, 0.2)
         this.scene.messageBroker.send(
             MessageEventType.NEW_PLAYER,
             { id: player.id, color: player.color, name: player.name } as NewPlayerMessage

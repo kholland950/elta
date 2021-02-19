@@ -6,8 +6,8 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
 
   scale: {
-    width: window.innerWidth,
-    height: window.innerHeight,
+    mode: Phaser.Scale.RESIZE,
+    resolution: window.devicePixelRatio || 1,
   },
 
   physics: {
