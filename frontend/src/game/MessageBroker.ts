@@ -96,6 +96,13 @@ export class MessageBroker {
       const data: SendableMessageData | undefined = callback(...callbackArgs)
       data && this.send(event, data)
     }
-    setInterval(wrapAndSend, 1000 / TPS, ...callbackArgs)
+
+    this.scene.time.addEvent({
+      delay: 1000 / TPS,
+      callback: wrapAndSend,
+      args: callbackArgs,
+      callbackScope: this,
+      loop: true,
+    })
   }
 }
