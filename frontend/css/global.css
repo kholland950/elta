@@ -1,0 +1,63 @@
+@import 'milligram/dist/milligram.css';
+
+:root {
+  --primary: #62929e;
+  --secondary: #f24236;
+  --bg: #393d3f;
+  --text: #fffafb;
+  --darkText: #050505;
+}
+
+.button {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
+input[type] {
+  color: var(--text);
+
+  &:focus {
+    border-color: var(--primary);
+  }
+}
+
+select {
+  color: var(--text);
+
+  & option {
+    background-color: var(--bg);
+  }
+
+  &:focus {
+    border-color: var(--primary);
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 8" width="30"><path fill="%2362929e" d="M0,0l6,8l6-8"/></svg>');
+  }
+}
+
+.card {
+  background-color: var(--bg);
+  padding: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+}
+
+body {
+  background-color: var(--bg);
+  color: var(--text);
+
+  background-image: url('/assets/spacebg.jpg');
+
+  height: 100vw;
+  width: 100vw;
+  overflow: hidden;
+}
+
+main {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  max-width: 450px;
+  height: 100vh;
+  margin: 0 auto;
+}

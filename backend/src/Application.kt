@@ -78,7 +78,7 @@ fun Application.module(testing: Boolean = false) {
     }
 
     routing {
-        get("/") {
+        get("{...}") {
             call.respond(MustacheContent("index.hbs", mapOf("user" to MustacheUser(1, "user man"))))
         }
 

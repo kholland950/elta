@@ -1,4 +1,4 @@
-import { MainScene } from './MainScene';
+import { MainScene } from './MainScene'
 
 const gameConfig: Phaser.Types.Core.GameConfig = {
   title: 'Sample',
@@ -22,6 +22,10 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#000000',
 
   scene: MainScene,
-};
+}
 
-export default new Phaser.Game(gameConfig);
+const startGame = () => {
+  return new Phaser.Game(gameConfig)
+}
+
+export { startGame }

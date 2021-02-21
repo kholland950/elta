@@ -1,5 +1,5 @@
-import { MainScene } from 'MainScene'
-import { MessageEventType, NewPlayerMessage, PlayerDataMessage, PlayerMoveMessage } from 'messages'
+import type { MainScene } from 'game/MainScene'
+import { MessageEventType, NewPlayerMessage, PlayerDataMessage, PlayerMoveMessage } from 'game/messages'
 
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
     lifespan: 1000,

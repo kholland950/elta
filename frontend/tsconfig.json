@@ -1,5 +1,7 @@
 {
+  "extends": "@tsconfig/svelte/tsconfig.json",
   "compilerOptions": {
+    "lib": ["DOM", "ES2018"],
     "target": "es5",
     "moduleResolution": "node",
     "noImplicitAny": true,
@@ -23,8 +25,8 @@
     "preserveConstEnums": true,
     "stripInternal": true,
     "typeRoots": [
-        "src/types",
-        "node_modules/@types"
+      "src/types",
+      "node_modules/@types"
     ]
   },
   "include": [
@@ -32,5 +34,5 @@
   ],
   "exclude": [
     "node_modules"
-  ],
+  ]
 }
