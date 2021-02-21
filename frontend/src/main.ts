@@ -5,14 +5,14 @@ import { startGame } from './game/Game'
 import App from './app/App.svelte'
 
 const app = new App({
-    target: document.body,
-    props: {
-        name: 'world'
-    }
-});
+  target: document.body,
+  props: {
+    name: 'world',
+  },
+})
 
 if (window.location.hash) {
-    startGame()
+  startGame()
 }
 
 export default app
