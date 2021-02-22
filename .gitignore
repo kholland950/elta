@@ -2,6 +2,7 @@
 /.idea
 /out
 /build
+/dist
 *.iml
 *.ipr
 *.iws
@@ -10,5 +11,5 @@
 
 frontend/node_modules
 **/build
-frontend/build_packageFrontend
+**/dist
 

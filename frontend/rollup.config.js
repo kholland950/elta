@@ -4,7 +4,7 @@ import typescript from '@rollup/plugin-typescript'
 import svelte from 'rollup-plugin-svelte'
 import postcss from 'rollup-plugin-postcss'
 import livereload from 'rollup-plugin-livereload'
-import css from 'rollup-plugin-css-only'
+import copy from 'rollup-plugin-copy'
 
 const proxy = require('./proxy')
 
@@ -17,7 +17,7 @@ export default {
     ],
 
     output: {
-        file: './build/bundle.js',
+        file: './dist/static/bundle.js',
         name: 'Game',
         format: 'iife',
         sourcemap: true,
@@ -57,13 +57,19 @@ export default {
             ignoreGlobal: true
         }),
 
+        copy({
+            targets: [
+                { src: 'assets', dest: 'dist/static' }
+            ]
+        }),
+
         // In dev mode, call `npm run start` once
         // the bundle has been generated
         !production && proxy(),
 
         // Watch the `public` directory and refresh the
         // browser on changes when not in production
-        !production && livereload('build'),
+        !production && livereload('dist'),
 
         //  See https://www.npmjs.com/package/rollup-plugin-typescript2 for config options
         typescript(),

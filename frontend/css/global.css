@@ -45,7 +45,7 @@ body {
   background-color: var(--bg);
   color: var(--text);
 
-  background-image: url('/assets/spacebg.jpg');
+  background-image: url('/static/assets/spacebg.jpg');
 
   height: 100vw;
   width: 100vw;

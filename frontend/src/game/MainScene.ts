@@ -17,9 +17,9 @@ export class MainScene extends Phaser.Scene {
 
   public preload() {
     const colors = ['Blue', 'Green', 'Orange', 'Red', 'Violet', 'Yellow']
-    colors.forEach((color) => this.load.image(color, `/assets/${color}Light.png`))
+    colors.forEach((color) => this.load.image(color, `/static/assets/${color}Light.png`))
 
-    this.load.image('bg', '/assets/spacebg.jpg')
+    this.load.image('bg', '/static/assets/spacebg.jpg')
   }
 
   public create() {
