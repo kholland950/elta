@@ -89,10 +89,6 @@ tasks.named<NpmTask>("npm_run_build") {
     outputs.dir("frontend/dist")
 }
 
-tasks.named("npm_run_build") {
-    dependsOn("npm_install")
-}
-
 tasks.named("classes") {
     dependsOn("npm_run_build")
 }
