@@ -32,7 +32,11 @@ export class MessageBroker {
   private messageQueue: Array<WebSocketMessage> = []
 
   constructor(scene: MainScene) {
-    this.socket = new WebSocket(`ws://${location.host}/ws/game`)
+    let socketScheme: String = 'ws'
+    if (window.location.origin.startsWith('https')) {
+      socketScheme = 'wss'
+    }
+    this.socket = new WebSocket(`${socketScheme}://${location.host}/ws/game`)
     this.scene = scene
     this.scene.events.on('destroy', () => this.socket.close())
 
