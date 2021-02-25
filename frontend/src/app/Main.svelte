@@ -20,7 +20,7 @@
 
 <main>
   <div class="card main">
-    <h1>spacelights</h1>
+    <h1>elta</h1>
     <div class="create-room">
       <button class="button" on:click={joinRoom}> Create Room </button>
     </div>
