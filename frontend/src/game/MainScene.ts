@@ -1,5 +1,6 @@
 import { MessageBroker } from 'game/MessageBroker'
 import { PlayerManager } from 'game/PlayerManager'
+import type { GameObjects } from 'phaser'
 
 const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
   active: false,

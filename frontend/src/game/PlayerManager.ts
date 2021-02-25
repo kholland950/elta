@@ -96,7 +96,6 @@ export class PlayerManager {
     y: number,
     id = PlayerManager.generatePlayerId(),
   ) {
-    if (!isLocal) console.log(x, y)
     const player: Player = {} as any
     player.id = id
     player.isLocal = isLocal
@@ -177,6 +176,11 @@ export class PlayerManager {
     return playerPostion
   }
 
+  public playerJoined(color: string, name: string, x: number, y: number, id: string) {
+    this.addPlayer(color, name, false, x, y, id)
+    this.scene.events.emit('message', `${name} joined`)
+  }
+
   public playerMoved(id: string, x: number, y: number, velocityX: number, velocityY: number) {
     const playerUpdated = this.remotePlayers.find((player) => player.id === id)
     if (playerUpdated) {
@@ -195,6 +199,7 @@ export class PlayerManager {
     const index = this.remotePlayers.indexOf(playerToRemove as Player, 0)
     if (index > -1) {
       this.remotePlayers.splice(index, 1)
+      this.scene.events.emit('message', `${playerToRemove?.name} left`)
     }
   }
 

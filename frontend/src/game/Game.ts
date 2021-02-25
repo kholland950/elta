@@ -1,3 +1,4 @@
+import { HUDScene } from './HUDScene'
 import { MainScene } from './MainScene'
 
 const gameConfig: Phaser.Types.Core.GameConfig = {
@@ -21,7 +22,7 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   parent: 'game',
   backgroundColor: '#000000',
 
-  scene: MainScene,
+  scene: [MainScene, HUDScene],
 }
 
 const startGame = () => {

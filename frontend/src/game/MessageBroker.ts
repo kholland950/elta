@@ -13,7 +13,7 @@ import {
 
 const messageHandlers: Record<string, Function> = {
   [MessageEventType.NEW_PLAYER]: (data: NewPlayerMessage, scene: MainScene) => {
-    scene.playerManager.addPlayer(data.color, data.name, false, data.x, data.y, data.id)
+    scene.playerManager.playerJoined(data.color, data.name, data.x, data.y, data.id)
   },
   [MessageEventType.PLAYER_MOVE]: (data: PlayerMoveMessage, scene: MainScene) => {
     scene.playerManager.playerMoved(data.playerId, data.x, data.y, data.velocityX, data.velocityY)
