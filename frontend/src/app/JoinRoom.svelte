@@ -19,7 +19,7 @@
   function joinRoom(event) {
     event.preventDefault()
     console.log(name)
-    if (name.match(/[\w\d ]+/) && name.length >= 4 && name.length <= 15 && color) {
+    if (name.match(/[\w\d ]+/) && name.length >= 2 && name.length <= 15 && color) {
       window.localStorage.setItem('name', name)
       window.localStorage.setItem('color', color)
       navigate(`/room/${id}`)

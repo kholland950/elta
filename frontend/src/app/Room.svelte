@@ -7,7 +7,7 @@
 
   const name = localStorage.getItem('name')
   const color = localStorage.getItem('color')
-  const validName = name.match(/[\w\d ]+/) && name.length >= 4 && name.length <= 15
+  const validName = name.match(/[\w\d ]+/) && name.length >= 2 && name.length <= 15
   if (!validName || !color) {
     setTimeout(() => navigate(`/joinroom/${id}`))
   } else {

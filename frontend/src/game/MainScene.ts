@@ -1,6 +1,5 @@
 import { MessageBroker } from 'game/MessageBroker'
 import { PlayerManager } from 'game/PlayerManager'
-import type { GameObjects } from 'phaser'
 
 const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
   active: false,
@@ -18,7 +17,7 @@ export class MainScene extends Phaser.Scene {
 
   public preload() {
     const colors = ['Blue', 'Green', 'Orange', 'Red', 'Violet', 'Yellow']
-    colors.forEach((color) => this.load.image(color, `/static/assets/${color}Light.png`))
+    colors.forEach((color) => this.load.image(color, `/static/assets/flarelight.png`))
 
     this.load.image('bg', '/static/assets/spacebg.jpg')
   }

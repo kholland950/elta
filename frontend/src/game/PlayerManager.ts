@@ -5,12 +5,14 @@ import {
   PlayerDataMessage,
   PlayerMoveMessage,
 } from 'game/messages'
+import type { Physics } from 'phaser'
 
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
   lifespan: 1000,
-  gravityY: 2000,
+  // gravityY: 2000,
   blendMode: 'SCREEN',
   scale: { start: 0.1, end: 0 },
+  alpha: { start: 1, end: 0 },
   on: false,
 }
 
@@ -27,6 +29,8 @@ const playerConfig = {
     drag: 200,
     bounce: 0.4,
     maxSpeed: 2000,
+    dashSpeed: 1500,
+    dashesAllowed: 2,
     acceleration: 3000,
     jumpVelocity: 1000,
   },
@@ -53,10 +57,20 @@ export class PlayerManager {
     left: Array<Phaser.Input.Keyboard.Key>
     right: Array<Phaser.Input.Keyboard.Key>
     jump: Array<Phaser.Input.Keyboard.Key>
+    dash: Phaser.Input.Keyboard.Key
+    stall: Phaser.Input.Keyboard.Key
+  }
+  private state: {
+    canStall: Boolean
+    dashes: number
   }
 
   constructor(scene: MainScene) {
     this.scene = scene as any
+    this.state = {
+      canStall: false,
+      dashes: 2,
+    }
     this.controls = {
       left: [
         this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
@@ -70,6 +84,8 @@ export class PlayerManager {
         this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
         this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
       ],
+      dash: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
+      stall: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
     }
   }
 
@@ -82,6 +98,17 @@ export class PlayerManager {
       name: player.name,
     } as NewPlayerMessage)
     this.scene.messageBroker.schedule(MessageEventType.PLAYER_MOVE, this.getPlayerPosition, player)
+
+    player.sprite.body.setCollideWorldBounds(true, undefined, undefined, true)
+    this.scene.physics.world.on(
+      'worldbounds',
+      (body: Physics.Arcade.Body, up: Boolean, down: Boolean, left: Boolean, right: Boolean) => {
+        if (body == player.sprite.body && (left || right || down)) {
+          this.state.canStall = true
+          this.state.dashes = playerConfig.physics.dashesAllowed
+        }
+      },
+    )
   }
 
   private addRemotePlayer(player: Player) {
@@ -206,6 +233,13 @@ export class PlayerManager {
   public update() {
     this.scene.physics.collide(
       this.remotePlayers.map((player) => player.sprite).concat(this.localPlayer.sprite),
+      undefined,
+      (p1, p2) => {
+        if (p1.body === this.localPlayer.sprite.body || p2.body === this.localPlayer.sprite.body) {
+          this.state.canStall = true
+          this.state.dashes = playerConfig.physics.dashesAllowed
+        }
+      },
     )
 
     this.updatePlayer(this.localPlayer)
@@ -220,11 +254,30 @@ export class PlayerManager {
 
     if (this.right()) {
       this.localPlayer.sprite.body.setAccelerationX(playerConfig.physics.acceleration)
+      if (this.dash()) {
+        this.localPlayer.sprite.body.setVelocityX(playerConfig.physics.dashSpeed)
+        this.state.dashes -= 1
+      }
     } else if (this.left()) {
       this.localPlayer.sprite.body.setAccelerationX(-playerConfig.physics.acceleration)
+      if (this.dash()) {
+        this.localPlayer.sprite.body.setVelocityX(-playerConfig.physics.dashSpeed)
+        this.state.dashes -= 1
+      }
+    } else if (this.stall()) {
+      this.localPlayer.sprite.body.setVelocity(0, 0)
+      this.state.canStall = false
     } else {
       this.localPlayer.sprite.body.setAccelerationX(0)
     }
+  }
+
+  private stall() {
+    return this.state.canStall && Phaser.Input.Keyboard.DownDuration(this.controls.stall, 500)
+  }
+
+  private dash() {
+    return this.state.dashes > 0 && Phaser.Input.Keyboard.JustDown(this.controls.dash)
   }
 
   private jump() {
