@@ -1,4 +1,5 @@
-# ktor/phaser game poc
+# elta
+## a multiplayer web browser game
 
 ## Run
 Backend
