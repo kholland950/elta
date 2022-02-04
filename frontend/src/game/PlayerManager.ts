@@ -6,6 +6,7 @@ import {
   PlayerMoveMessage,
 } from 'game/messages'
 import type { Physics } from 'phaser'
+import events from 'app/events'
 
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
   lifespan: 1000,
@@ -59,6 +60,7 @@ export class PlayerManager {
     jump: Array<Phaser.Input.Keyboard.Key>
     dash: Phaser.Input.Keyboard.Key
     stall: Phaser.Input.Keyboard.Key
+    scoreboard: Phaser.Input.Keyboard.Key
   }
   private state: {
     canStall: Boolean
@@ -86,6 +88,7 @@ export class PlayerManager {
       ],
       dash: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
       stall: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
+      scoreboard: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
     }
   }
 
@@ -123,6 +126,8 @@ export class PlayerManager {
     y: number,
     id = PlayerManager.generatePlayerId(),
   ) {
+    events.send('addPlayer', { name, id })
+
     const player: Player = {} as any
     player.id = id
     player.isLocal = isLocal
@@ -219,6 +224,8 @@ export class PlayerManager {
   }
 
   public playerLeft(id: string) {
+    events.send('removePlayer', id)
+
     const playerToRemove = this.remotePlayers.find((player) => player.id === id)
     playerToRemove?.sprite.destroy()
     playerToRemove?.text.destroy()
@@ -250,6 +257,12 @@ export class PlayerManager {
       this.localPlayer.sprite.body.setVelocityY(-playerConfig.physics.jumpVelocity)
     } else {
       this.localPlayer.sprite.body.setAccelerationY(0)
+    }
+
+    if (this.openScoreboard()) {
+      this.scene.events.emit('openScoreboard')
+    } else if (this.closeScoreboard()) {
+      this.scene.events.emit('closeScoreboard')
     }
 
     if (this.right()) {
@@ -290,6 +303,14 @@ export class PlayerManager {
 
   private right() {
     return this.controls.right.some((key) => key.isDown)
+  }
+
+  private openScoreboard() {
+    return Phaser.Input.Keyboard.JustDown(this.controls.scoreboard)
+  }
+
+  private closeScoreboard() {
+    return Phaser.Input.Keyboard.JustUp(this.controls.scoreboard)
   }
 
   private updatePlayer(player: Player) {

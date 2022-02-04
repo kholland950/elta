@@ -63,3 +63,19 @@ main {
   height: 100vh;
   margin: 0 auto;
 }
+
+ul {
+  list-style: none;
+}
+
+main.menu {
+  position: fixed;
+  height: 100vh;
+  width: 100vw;
+  max-width: none;
+}
+
+.scoreboard {
+  background-color: #393d3fbb;
+  min-width: 450px;
+}
