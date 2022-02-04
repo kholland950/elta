@@ -1,4 +1,4 @@
-import global from 'app/global'
+import events from 'app/events'
 
 type MessageObject = {
   id: string
@@ -23,10 +23,10 @@ export class HUDScene extends Phaser.Scene {
       this.addMessage(message, timeout),
     )
     gameScene.events.on('openScoreboard', () => {
-      global.showScoreboard(true)
+      events.send('showScoreboard', true)
     })
     gameScene.events.on('closeScoreboard', () => {
-      global.showScoreboard(false)
+      events.send('showScoreboard', false)
     })
   }
 

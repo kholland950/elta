@@ -6,7 +6,7 @@ import {
   PlayerMoveMessage,
 } from 'game/messages'
 import type { Physics } from 'phaser'
-import global from 'app/global'
+import events from 'app/events'
 
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
   lifespan: 1000,
@@ -126,10 +126,7 @@ export class PlayerManager {
     y: number,
     id = PlayerManager.generatePlayerId(),
   ) {
-    global.addPlayer({
-      name,
-      id,
-    })
+    events.send('addPlayer', { name, id })
 
     const player: Player = {} as any
     player.id = id
@@ -227,7 +224,7 @@ export class PlayerManager {
   }
 
   public playerLeft(id: string) {
-    global.removePlayer(id)
+    events.send('removePlayer', id)
 
     const playerToRemove = this.remotePlayers.find((player) => player.id === id)
     playerToRemove?.sprite.destroy()

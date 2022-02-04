@@ -2,27 +2,27 @@
   import { onDestroy } from 'svelte'
   import { startGame } from 'game/Game'
   import { navigate } from 'svelte-routing'
-  import global from './global'
+  import events from './events'
 
   export let id
 
   $: players = []
   $: showScoreboard = false
 
-  global.addPlayer = (player) => {
+  events.add('addPlayer', (player) => {
     players = [...players, player]
-  }
+  })
 
-  global.removePlayer = (id) => {
+  events.add('removePlayer', (id) => {
     const index = players.findIndex((player) => player.id === id)
     if (index > -1) {
       players = [...players.slice(0, index), ...players.slice(index + 1, players.length)]
     }
-  }
+  })
 
-  global.showScoreboard = (show) => {
+  events.add('showScoreboard', (show) => {
     showScoreboard = show
-  }
+  })
 
   const name = localStorage.getItem('name')
   const color = localStorage.getItem('color')
