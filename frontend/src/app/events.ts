@@ -1,6 +1,8 @@
-// NOTE: Rename this at some point?
-// The intent of this object is to allow Phaser events to set
-// data and cause renders in svelte.
+/**
+ * General event/callback listener holder used for connecting Phaser to Svelte
+ *
+ * @see Room.svelte
+ */
 class Events {
   private events: { [key: string]: Function }
 
