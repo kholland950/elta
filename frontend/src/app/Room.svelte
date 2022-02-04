@@ -2,24 +2,25 @@
   import { onDestroy } from 'svelte'
   import { startGame } from 'game/Game'
   import { navigate } from 'svelte-routing'
+  import global from './global'
 
   export let id
 
   $: players = []
   $: showScoreboard = false
 
-  window._addPlayer = (player) => {
+  global.addPlayer = (player) => {
     players = [...players, player]
   }
 
-  window._removePlayer = (id) => {
+  global.removePlayer = (id) => {
     const index = players.findIndex((player) => player.id === id)
     if (index > -1) {
       players = [...players.slice(0, index), ...players.slice(index + 1, players.length)]
     }
   }
 
-  window._showScoreboard = (show) => {
+  global.showScoreboard = (show) => {
     showScoreboard = show
   }
 
