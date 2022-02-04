@@ -185,9 +185,28 @@ export class PlayerManager {
   }
 
   public updateGameState(players: Array<PlayerDataMessage>) {
-    players?.forEach((player) => {
-      if (!this.remotePlayers.find((p) => p.id === player.id)) {
-        this.addPlayer(player.color, player.name, false, player.x, player.y, player.id)
+    players?.forEach((playerData) => {
+      const player =
+        playerData.id === this.localPlayer.id
+          ? this.localPlayer
+          : this.remotePlayers.find((p) => p.id === playerData.id)
+      if (!player) {
+        this.addPlayer(
+          playerData.color,
+          playerData.name,
+          false,
+          playerData.x,
+          playerData.y,
+          playerData.id,
+        )
+      } else if (player !== this.localPlayer) {
+        this.playerMoved(
+          player,
+          playerData.x,
+          playerData.y,
+          playerData.velocityX,
+          playerData.velocityY,
+        )
       }
     })
   }
@@ -213,14 +232,11 @@ export class PlayerManager {
     this.scene.events.emit('message', `${name} joined`)
   }
 
-  public playerMoved(id: string, x: number, y: number, velocityX: number, velocityY: number) {
-    const playerUpdated = this.remotePlayers.find((player) => player.id === id)
-    if (playerUpdated) {
-      playerUpdated.sprite.x = x
-      playerUpdated.sprite.y = y
-      playerUpdated.sprite.body.setVelocityX(velocityX)
-      playerUpdated.sprite.body.setVelocityY(velocityY)
-    }
+  public playerMoved(player: Player, x: number, y: number, velocityX: number, velocityY: number) {
+    player.sprite.x = x
+    player.sprite.y = y
+    player.sprite.body.setVelocityX(velocityX)
+    player.sprite.body.setVelocityY(velocityY)
   }
 
   public playerLeft(id: string) {

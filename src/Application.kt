@@ -94,8 +94,6 @@ fun Application.module(testing: Boolean = false) {
         }
 
         webSocket("/ws/game") {
-//            send(Frame.Text("Hi from server"))
-
             MessageBroker.add(this)
 
             try {
