@@ -1,5 +1,6 @@
 /**
  * General event/callback listener holder used for connecting Phaser to Svelte
+ * NOTE: Maybe a better name for this? 'events' is pretty overloaded here
  *
  * @see Room.svelte
  */
