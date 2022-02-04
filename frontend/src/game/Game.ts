@@ -2,7 +2,7 @@ import { HUDScene } from './HUDScene'
 import { MainScene } from './MainScene'
 
 const gameConfig: Phaser.Types.Core.GameConfig = {
-  title: 'Sample',
+  title: 'elta',
 
   type: Phaser.AUTO,
 
