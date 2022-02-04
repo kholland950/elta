@@ -20,10 +20,15 @@ export class HUDScene extends Phaser.Scene {
     gameScene.events.on('message', (message: string, timeout: number) =>
       this.addMessage(message, timeout),
     )
+    gameScene.events.on('openScoreboard', () => {
+      window._showScoreboard(true)
+    })
+    gameScene.events.on('closeScoreboard', () => {
+      window._showScoreboard(false)
+    })
   }
 
   private addMessage(message: string, timeout: number = 5000) {
-    console.log(message)
     const newY = this.messages.length * 25 + 10
 
     const text = this.add.text(10, newY, message, { font: '20px Comfortaa' })
