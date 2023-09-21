@@ -1,4 +1,4 @@
-FROM gradle:6.7-jdk11-openj9 as builder
+FROM gradle:8.3.0-jdk20-alpine as builder
 
 # Set the working directory to /app
 WORKDIR /app
@@ -8,7 +8,7 @@ COPY . /app
 
 RUN gradle build
 
-FROM openjdk:12-jdk-alpine
+FROM openjdk:20-jdk-buster
 
 COPY --from=builder /app/build/libs/app.jar /app/
 
