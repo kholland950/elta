@@ -15,8 +15,6 @@ import org.slf4j.event.*
 import io.ktor.websocket.*
 import io.ktor.http.cio.websocket.*
 import kotlinx.coroutines.channels.ClosedReceiveChannelException
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 import java.time.*
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
@@ -94,8 +92,6 @@ fun Application.module(testing: Boolean = false) {
         }
 
         webSocket("/ws/game") {
-//            send(Frame.Text("Hi from server"))
-
             MessageBroker.add(this)
 
             try {

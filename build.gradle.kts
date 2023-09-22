@@ -1,36 +1,36 @@
 import com.moowork.gradle.node.npm.NpmTask
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 
-val logback_version: String by project
-val ktor_version: String by project
-val kotlin_version: String by project
+val logbackVersion: String by project
+val ktorVersion: String by project
+val kotlinVersion: String by project
 
 repositories {
     mavenLocal()
-    jcenter()
     mavenCentral()
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib-jdk8:$kotlin_version")
-    implementation("io.ktor:ktor-server-netty:$ktor_version")
-    implementation("ch.qos.logback:logback-classic:$logback_version")
-    implementation("io.ktor:ktor-server-core:$ktor_version")
-    implementation("io.ktor:ktor-mustache:$ktor_version")
-    implementation("io.ktor:ktor-server-host-common:$ktor_version")
-    implementation("io.ktor:ktor-locations:$ktor_version")
-    implementation("io.ktor:ktor-server-sessions:$ktor_version")
-    implementation("io.ktor:ktor-websockets:$ktor_version")
+    implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
+    implementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
+    implementation("io.ktor:ktor-server-netty:$ktorVersion")
+    implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("io.ktor:ktor-server-core:$ktorVersion")
+    implementation("io.ktor:ktor-mustache:$ktorVersion")
+    implementation("io.ktor:ktor-server-host-common:$ktorVersion")
+    implementation("io.ktor:ktor-locations:$ktorVersion")
+    implementation("io.ktor:ktor-server-sessions:$ktorVersion")
+    implementation("io.ktor:ktor-websockets:$ktorVersion")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.1")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
-    testImplementation("io.ktor:ktor-server-tests:$ktor_version")
+    testImplementation("io.ktor:ktor-server-tests:$ktorVersion")
 }
 
 plugins {
     application
-    kotlin("jvm") version "1.4.10"
-    kotlin("plugin.serialization") version "1.4.10"
-    id("com.github.johnrengelman.shadow") version "5.0.0"
+    kotlin("jvm") version "1.9.10"
+    kotlin("plugin.serialization") version "1.9.10"
+    id("com.github.johnrengelman.shadow") version "8.0.0"
 
     base
     id("com.github.node-gradle.node") version "2.2.4"
@@ -40,13 +40,13 @@ group = "com.kholland"
 version = "0.0.1-SNAPSHOT"
 
 application {
-    mainClassName = "io.ktor.server.netty.EngineMain"
+    mainClass.set("io.ktor.server.netty.EngineMain")
 }
 
 tasks.withType<ShadowJar>() {
-    baseName = "app"
-    classifier = ""
-    version = ""
+    archiveBaseName.set("app")
+    archiveClassifier.set("")
+    archiveVersion.set("")
 }
 
 kotlin.sourceSets["main"].kotlin.srcDirs("src")
@@ -87,6 +87,10 @@ tasks.named<NpmTask>("npm_run_build") {
     inputs.file("frontend/package-lock.json")
 
     outputs.dir("frontend/dist")
+}
+
+tasks.named("processResources") {
+  dependsOn("npm_run_build")
 }
 
 tasks.named("classes") {
