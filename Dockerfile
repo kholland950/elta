@@ -1,4 +1,4 @@
-FROM gradle:8.3.0-jdk20-alpine as builder
+FROM gradle:8.3-jdk20 as builder
 
 # Set the working directory to /app
 WORKDIR /app
