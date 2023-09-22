@@ -1,5 +1,5 @@
-import com.moowork.gradle.node.npm.NpmTask
 import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
+import com.github.gradle.node.npm.task.NpmTask
 
 val logbackVersion: String by project
 val ktorVersion: String by project
@@ -33,7 +33,7 @@ plugins {
     id("com.github.johnrengelman.shadow") version "8.0.0"
 
     base
-    id("com.github.node-gradle.node") version "2.2.4"
+    id("com.github.node-gradle.node") version "7.0.0"
 }
 
 group = "com.kholland"
@@ -63,18 +63,18 @@ node {
        Task name pattern:
        ./gradlew npm_<command> Executes an NPM command.
     */
-
-    // Version of node to use.
-    version = "15.2.0"
-
-    // Version of npm to use.
-    npmVersion = ""
-
     // If true, it will download node using above parameters.
     // If false, it will try to use globally installed node.
     download = true
 
-    nodeModulesDir = file("frontend/")
+    // Version of node to use.
+    version = "18.18.0"
+    distBaseUrl = "https://nodejs.org/dist"
+
+    // Version of npm to use.
+    npmVersion = "10.1.0"
+
+    nodeProjectDir = file("frontend/")
 }
 
 tasks.named<NpmTask>("npm_run_build") {
