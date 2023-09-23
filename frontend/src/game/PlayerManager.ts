@@ -260,7 +260,6 @@ export class PlayerManager {
           this.state.canStall = true
           this.state.dashes = playerConfig.physics.dashesAllowed
 
-          console.log(body1.body.center.x, body1.body.center.y)
           this.playerExplosion.explode(20, body1.body.center.x, body1.body.center.y)
 
           if (body1.body.x > body2.body.x) {
