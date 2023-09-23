@@ -17,9 +17,10 @@ export class MainScene extends Phaser.Scene {
 
   public preload() {
     const colors = ['Blue', 'Green', 'Orange', 'Red', 'Violet', 'Yellow']
-    colors.forEach((color) => this.load.image(color, `/static/assets/flarelight.png`))
+    colors.forEach((color) => this.load.image(color, `/static/assets/${color}Light.png`))
 
     this.load.image('bg', '/static/assets/spacebg.jpg')
+    this.load.atlas('flares', '/static/assets/flares.png', '/static/assets/flares.json');
   }
 
   public create() {

@@ -36,7 +36,7 @@
     "rollup-plugin-terser": "^7.0.2"
   },
   "dependencies": {
-    "phaser": "^3.24.1",
+    "phaser": "^3.60.0",
     "svelte": "^3.32.3",
     "svelte-routing": "^1.5.0",
     "tslib": "^2.0.3",
