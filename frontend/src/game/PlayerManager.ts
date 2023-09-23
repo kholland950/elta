@@ -13,7 +13,7 @@ const collisionEmitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitter
   lifespan: 2000,
   speed: { min: 600, max: 1000 },
   scale: { start: 0.8, end: 0 },
-  gravityY: 500,
+  gravityY: 1000,
   blendMode: 'ADD',
   emitting: false,
 }
