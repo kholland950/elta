@@ -8,13 +8,23 @@ import {
 import type { Physics } from 'phaser'
 import events from 'app/events'
 
+const collisionEmitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
+  frame: ['red', 'yellow', 'green'],
+  lifespan: 2000,
+  speed: { min: 600, max: 1000 },
+  scale: { start: 0.8, end: 0 },
+  gravityY: 500,
+  blendMode: 'ADD',
+  emitting: false,
+}
+
 const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
   lifespan: 1000,
   // gravityY: 2000,
   blendMode: 'SCREEN',
   scale: { start: 0.1, end: 0 },
   alpha: { start: 1, end: 0 },
-  on: false,
+  emitting: false,
 }
 
 const playerConfig = {
@@ -44,7 +54,7 @@ export interface Player {
   color: string
   isLocal: boolean
   name: string
-  particles: Phaser.GameObjects.Particles.ParticleEmitterManager
+  particles: Phaser.GameObjects.Particles.ParticleEmitter
 }
 
 let lastX: number = 0
@@ -66,6 +76,7 @@ export class PlayerManager {
     canStall: Boolean
     dashes: number
   }
+  private playerExplosion: Phaser.GameObjects.Particles.ParticleEmitter
 
   constructor(scene: MainScene) {
     this.scene = scene as any
@@ -112,6 +123,8 @@ export class PlayerManager {
         }
       },
     )
+
+    this.playerExplosion = this.scene.add.particles(0, 0, 'flares', collisionEmitterConfig)
   }
 
   private addRemotePlayer(player: Player) {
@@ -155,8 +168,7 @@ export class PlayerManager {
   }
 
   private createParticles(player: Player) {
-    player.particles = this.scene.add.particles(player.color)
-    player.particles.createEmitter(emitterConfig)
+    player.particles = this.scene.add.particles(0, 0, player.color, emitterConfig)
   }
 
   private createSprite(player: Player, x: number, y: number) {
@@ -242,9 +254,22 @@ export class PlayerManager {
       this.remotePlayers.map((player) => player.sprite).concat(this.localPlayer.sprite),
       undefined,
       (p1, p2) => {
-        if (p1.body === this.localPlayer.sprite.body || p2.body === this.localPlayer.sprite.body) {
+        const body1 = p1 as Phaser.Types.Physics.Arcade.GameObjectWithBody
+        const body2 = p2 as Phaser.Types.Physics.Arcade.GameObjectWithBody
+        if (body1.body === this.localPlayer.sprite.body || body2.body === this.localPlayer.sprite.body) {
           this.state.canStall = true
           this.state.dashes = playerConfig.physics.dashesAllowed
+
+          console.log(body1.body.center.x, body1.body.center.y)
+          this.playerExplosion.explode(20, body1.body.center.x, body1.body.center.y)
+
+          if (body1.body.x > body2.body.x) {
+            body1.body.velocity.add({ x: 500, y: 800})
+            body2.body.velocity.add({ x: -500, y: 800})
+          } else {
+            body1.body.velocity.add({ x: -500, y: 800})
+            body2.body.velocity.add({ x: 500, y: 800})
+          }
         }
       },
     )
