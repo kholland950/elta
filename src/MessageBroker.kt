@@ -1,11 +1,16 @@
 package com.kholland
 
 import io.ktor.http.cio.websocket.*
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.*
+import java.util.*
+import kotlin.collections.ArrayList
+import kotlin.collections.HashMap
+import kotlin.concurrent.fixedRateTimer
 
 data class ActiveWebSocket(val session: WebSocketSession)
 
@@ -36,12 +41,14 @@ data class Player(
         var velocityY: Double
 )
 
+@Serializable
 object GameState {
     val players: HashMap<String, Player> = hashMapOf()
 }
 
 object MessageBroker {
     private val websockets = mutableListOf<ActiveWebSocket>()
+    private lateinit var timer: Timer
 
     fun add(session: WebSocketSession) = websockets.add(ActiveWebSocket(session))
 
@@ -53,6 +60,10 @@ object MessageBroker {
         }?.id ?: ""
 
         GameState.players.remove(id)
+
+        if (GameState.players.size <= 1) {
+            timer.cancel()
+        }
 
         broadcastToOthers("playerLeft", Json.encodeToJsonElement(PlayerLeftMessage(id)), session)
     }
@@ -75,7 +86,17 @@ object MessageBroker {
 
         GameState.players[message.id] = Player(session, message.id, message.name, message.color, 0.0, 0.0, 0.0, 0.0)
 
-        //tell other players about the new player
+        if (GameState.players.size > 1) {
+            timer = fixedRateTimer("gameStateUpdate", false, 0L, 1000/32) {
+                runBlocking {
+                    broadcast("gameState", Json.encodeToJsonElement(
+                        GameStateMessage(ArrayList(GameState.players.values))
+                    ))
+                }
+            }
+        }
+
+        // tell other players about the new player
         broadcastToOthers("newPlayer", Json.encodeToJsonElement(message), session)
     }
 
@@ -87,11 +108,18 @@ object MessageBroker {
         player?.velocityY = message.velocityY
 
         //tell other players about the move
-        broadcastToOthers("playerMove", Json.encodeToJsonElement(message), session)
+        // don't need to tell players if we broadcast per tick to each
+        // broadcastToOthers("playerMove", Json.encodeToJsonElement(message), session)
     }
 
     private suspend fun broadcastToOthers(event: String, message: JsonElement, sourceSession: WebSocketSession) {
         websockets.filter { it.session !== sourceSession }.map {
+            it.session.send(Json.encodeToString(WebSocketMessage(event, message)))
+        }
+    }
+
+    private suspend fun broadcast(event: String, message: JsonElement) {
+        websockets.map {
             it.session.send(Json.encodeToString(WebSocketMessage(event, message)))
         }
     }

@@ -15,9 +15,9 @@ const messageHandlers: Record<string, Function> = {
   [MessageEventType.NEW_PLAYER]: (data: NewPlayerMessage, scene: MainScene) => {
     scene.playerManager.playerJoined(data.color, data.name, data.x, data.y, data.id)
   },
-  [MessageEventType.PLAYER_MOVE]: (data: PlayerMoveMessage, scene: MainScene) => {
-    scene.playerManager.playerMoved(data.playerId, data.x, data.y, data.velocityX, data.velocityY)
-  },
+  // [MessageEventType.PLAYER_MOVE]: (data: PlayerMoveMessage, scene: MainScene) => {
+  //   scene.playerManager.playerMoved(data.playerId, data.x, data.y, data.velocityX, data.velocityY)
+  // },
   [MessageEventType.PLAYER_LEFT]: (data: PlayerLeftMessage, scene: MainScene) => {
     scene.playerManager.playerLeft(data.playerId)
   },
@@ -76,10 +76,11 @@ export class MessageBroker {
         data = message.data as GameStateMessage
         break
       default:
+        console.log(message.event, message.data)
         data = message.data
     }
 
-    messageHandlers[message.event](data, this.scene)
+    messageHandlers[message.event]?.(data, this.scene)
   }
 
   send(event: MessageEventType, data: SendableMessageData) {
