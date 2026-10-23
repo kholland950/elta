@@ -1,5 +1,6 @@
 import Phaser from 'phaser'
 import type { QualityProfile } from 'game/fx/quality'
+import type { Rect } from 'game/race/stage'
 import { MAX_STAR_LAYERS, generateNebula, generateStarLayers, StarLayer } from 'game/fx/starfield'
 import { ensureGlowTexture, GLOW_TEXTURE } from 'game/render/textures'
 
@@ -8,6 +9,9 @@ const TILE_SIZE = 512
 const NEBULA_SCROLL = 0.08
 // Extra room around the parallax-scaled world so nebula still shows at the world edges
 const NEBULA_MARGIN = 2000
+// Star layers are sized to the parallax-scaled world plus a viewport this big, so any window up
+// to this size stays covered
+const MAX_VIEWPORT = 4096
 const BORDER_COLOR = 0x00e5ff
 const BORDER_PASSES = [
   { width: 28, alpha: 0.05 },
@@ -23,12 +27,12 @@ interface NebulaSprite {
 }
 
 /**
- * Procedural parallax starfield, nebula and neon world border.
+ * Procedural parallax starfield, nebula and neon world border, sized to the stage bounds.
  *
  * An object with scroll factor `s` is drawn at `x - camera.scrollX * s`, anchored to the camera's
  * top-left. Nebula images are offset by `(viewport / 2) * (1 - s)` so the layer is centred on the
- * camera instead; the offset is recomputed on resize. Star layers tile, so they only need to be big
- * enough to always cover the viewport.
+ * camera instead; the offset is recomputed on resize. Star layers tile, so they only need to cover
+ * every camera position in the world: from `bounds * s` to `(bounds + size) * s + viewport`.
  */
 export class BackgroundRenderer {
   private scene: Phaser.Scene
@@ -36,21 +40,29 @@ export class BackgroundRenderer {
   private nebula: Array<NebulaSprite> = []
   private border: Phaser.GameObjects.Graphics
 
-  constructor(scene: Phaser.Scene, worldSize: number, profile: QualityProfile) {
+  constructor(scene: Phaser.Scene, bounds: Rect, profile: QualityProfile) {
     this.scene = scene
     ensureGlowTexture(scene)
 
-    this.createNebula(worldSize)
-    this.createStars(worldSize)
-    this.createBorder(worldSize)
+    this.createNebula(bounds)
+    this.createStars(bounds)
+    this.createBorder(bounds)
 
     this.layoutNebula()
     scene.scale.on(Phaser.Scale.Events.RESIZE, this.layoutNebula, this)
-    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () =>
-      scene.scale.off(Phaser.Scale.Events.RESIZE, this.layoutNebula, this),
-    )
+    scene.events.once(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this)
 
     this.applyQuality(profile)
+  }
+
+  public destroy() {
+    this.scene.scale.off(Phaser.Scale.Events.RESIZE, this.layoutNebula, this)
+    this.scene.events.off(Phaser.Scenes.Events.SHUTDOWN, this.destroy, this)
+    this.starLayers.forEach((layer) => layer.destroy())
+    this.nebula.forEach(({ image }) => image.destroy())
+    this.border.destroy()
+    this.starLayers = []
+    this.nebula = []
   }
 
   public applyQuality(profile: QualityProfile) {
@@ -58,14 +70,21 @@ export class BackgroundRenderer {
     this.nebula.forEach(({ image }) => image.setVisible(profile.nebula))
   }
 
-  private createStars(worldSize: number) {
+  private createStars(bounds: Rect) {
     generateStarLayers(STAR_SEED, MAX_STAR_LAYERS, TILE_SIZE).forEach((layer, index) => {
       const key = `fx-stars-${index}`
       this.bakeStarTexture(key, layer)
-      // Twice the world so a parallax layer covers any viewport up to the world size
+      const s = layer.scrollFactor
       const sprite = this.scene.add
-        .tileSprite(0, 0, worldSize * 2, worldSize * 2, key)
-        .setScrollFactor(layer.scrollFactor)
+        .tileSprite(
+          Math.floor(bounds.x * s),
+          Math.floor(bounds.y * s),
+          Math.ceil(bounds.w * s) + MAX_VIEWPORT,
+          Math.ceil(bounds.h * s) + MAX_VIEWPORT,
+          key,
+        )
+        .setOrigin(0)
+        .setScrollFactor(s)
         .setDepth(-20 + index)
       // Offset each layer's pattern so the tiles don't line up between layers
       sprite.tilePositionX = index * 173
@@ -96,10 +115,14 @@ export class BackgroundRenderer {
     texture.refresh()
   }
 
-  private createNebula(worldSize: number) {
-    const span = worldSize * NEBULA_SCROLL + NEBULA_MARGIN
+  private createNebula(bounds: Rect) {
+    const span = Math.max(bounds.w, bounds.h) * NEBULA_SCROLL + NEBULA_MARGIN
+    // Nebula blobs are laid out around the origin; shift them to the parallax-scaled stage centre
+    const cx = (bounds.x + bounds.w / 2) * NEBULA_SCROLL
+    const cy = (bounds.y + bounds.h / 2) * NEBULA_SCROLL
     const glowSize = this.scene.textures.get(GLOW_TEXTURE).getSourceImage().width
-    generateNebula(STAR_SEED, span).forEach((blob) => {
+    generateNebula(STAR_SEED, span).forEach((generated) => {
+      const blob = { ...generated, x: generated.x + cx, y: generated.y + cy }
       const image = this.scene.add
         .image(blob.x, blob.y, GLOW_TEXTURE)
         .setScrollFactor(NEBULA_SCROLL)
@@ -119,12 +142,11 @@ export class BackgroundRenderer {
     this.nebula.forEach(({ image, x, y }) => image.setPosition(x + offsetX, y + offsetY))
   }
 
-  private createBorder(worldSize: number) {
+  private createBorder(bounds: Rect) {
     this.border = this.scene.add.graphics().setBlendMode(Phaser.BlendModes.ADD).setDepth(-5)
-    const half = worldSize / 2
     BORDER_PASSES.forEach(({ width, alpha }) => {
       this.border.lineStyle(width, BORDER_COLOR, alpha)
-      this.border.strokeRect(-half, -half, worldSize, worldSize)
+      this.border.strokeRect(bounds.x, bounds.y, bounds.w, bounds.h)
     })
   }
 }

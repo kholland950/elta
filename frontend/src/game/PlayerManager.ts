@@ -9,24 +9,24 @@ import Phaser from 'phaser'
 import type { Physics } from 'phaser'
 import events from 'app/events'
 import type { QualityProfile } from 'game/fx/quality'
-import { FeelSink, restoresCharge } from 'game/fx/feelEvents'
+import type { FeelSink } from 'game/fx/feelEvents'
 import { PhysicsSprite, PlayerVisuals } from 'game/render/PlayerVisuals'
+import {
+  BumpCooldowns,
+  bumpVelocity,
+  freshPilot,
+  InputFrame,
+  PilotState,
+  recharge,
+  seaDrag,
+  stepPilot,
+} from 'game/race/movement'
+import { BODY, STEP_MS } from 'game/race/tuning'
 
 const playerConfig = {
   startingPosition: { x: 400, y: 400 },
   scale: 0.1,
   hitboxOffset: 125,
-  hitboxRadius: 70,
-  physics: {
-    friction: 800,
-    drag: 200,
-    bounce: 0.4,
-    maxSpeed: 2000,
-    dashSpeed: 1500,
-    dashesAllowed: 2,
-    acceleration: 3000,
-    jumpVelocity: 1000,
-  },
 }
 
 export interface Player {
@@ -38,8 +38,16 @@ export interface Player {
   name: string
 }
 
-let lastX: number = 0
-let lastY: number = 0
+/** Presses seen since the last physics step; each is consumed by exactly one step. */
+interface Latches {
+  flap: boolean
+  dash: boolean
+  stall: boolean
+}
+
+const FLAP_KEYS = new Set(['Space', 'ArrowUp'])
+const DASH_KEYS = new Set(['ShiftLeft', 'ShiftRight'])
+const STALL_KEYS = new Set(['KeyE'])
 
 export class PlayerManager {
   private remotePlayers: Array<Player> = []
@@ -47,27 +55,27 @@ export class PlayerManager {
   private scene: MainScene
   private quality: QualityProfile
   private feel: FeelSink
+  /** Remote orbs, as an Arcade group so one overlap covers players who join later. */
+  private remoteGroup: Physics.Arcade.Group
   private controls: {
     left: Array<Phaser.Input.Keyboard.Key>
     right: Array<Phaser.Input.Keyboard.Key>
-    jump: Array<Phaser.Input.Keyboard.Key>
-    dash: Phaser.Input.Keyboard.Key
-    stall: Phaser.Input.Keyboard.Key
     scoreboard: Phaser.Input.Keyboard.Key
   }
-  private state: {
-    canStall: boolean
-    dashes: number
-  }
+  private latches: Latches = { flap: false, dash: false, stall: false }
+  private pilot: PilotState = freshPilot()
+  private bumps = new BumpCooldowns()
+  /** Physics steps run since the scene started; the clock for bump cooldowns. */
+  private steps = 0
+  private lastSent = { x: 0, y: 0 }
+  /** Y of the energy sea surface; below it the orb is slowed. */
+  private seaY = Infinity
 
   constructor(scene: MainScene, quality: QualityProfile, feel: FeelSink) {
-    this.scene = scene as any
+    this.scene = scene
     this.quality = quality
     this.feel = feel
-    this.state = {
-      canStall: false,
-      dashes: 2,
-    }
+    this.remoteGroup = scene.physics.add.group()
     // Keyboard input is enabled by default in the game config
     const keyboard = this.scene.input.keyboard!
     this.controls = {
@@ -79,14 +87,18 @@ export class PlayerManager {
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       ],
-      jump: [
-        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
-      ],
-      dash: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-      stall: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       scoreboard: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
     }
+    // Capture the action keys so they are tracked (and don't scroll the page)
+    keyboard.addKeys('SPACE,UP,SHIFT,E')
+    // Presses are latched from key events, so one shorter than a physics step is never lost and
+    // one is never seen twice when several steps run in a frame
+    keyboard.on(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, (event: KeyboardEvent) => {
+      if (event.repeat) return
+      if (FLAP_KEYS.has(event.code)) this.latches.flap = true
+      if (DASH_KEYS.has(event.code)) this.latches.dash = true
+      if (STALL_KEYS.has(event.code)) this.latches.stall = true
+    })
   }
 
   private addLocalPlayer(player: Player) {
@@ -102,12 +114,23 @@ export class PlayerManager {
     player.sprite.body.setCollideWorldBounds(true, undefined, undefined, true)
     this.scene.physics.world.on(
       'worldbounds',
-      (body: Physics.Arcade.Body, up: Boolean, down: Boolean, left: Boolean, right: Boolean) => {
-        if (body == player.sprite.body && (left || right || down)) {
-          this.recharge()
-        }
+      (body: Physics.Arcade.Body, up: boolean, down: boolean, left: boolean, right: boolean) => {
+        if (body === player.sprite.body && (up || left || right || down)) this.touchedSurface()
       },
     )
+    // Bumps act on the local orb only; each client moves its own orb
+    this.scene.physics.add.overlap(player.sprite, this.remoteGroup, (_local, other) =>
+      this.bumped(other as PhysicsSprite),
+    )
+  }
+
+  /** The local player's sprite, once it exists. */
+  public get localSprite(): PhysicsSprite | undefined {
+    return this.localPlayer?.sprite
+  }
+
+  public get localId(): string | undefined {
+    return this.localPlayer?.id
   }
 
   /** The visuals of the local or a remote player, if that player is currently in the game. */
@@ -116,26 +139,57 @@ export class PlayerManager {
     return this.remotePlayers.find((player) => player.id === id)?.visuals
   }
 
-  /** Restores stall and dashes; feedback only fires when something was actually used up. */
-  private recharge() {
-    const restored = restoresCharge(this.state, playerConfig.physics.dashesAllowed)
-    this.state.canStall = true
-    this.state.dashes = playerConfig.physics.dashesAllowed
-    if (restored) this.emitLocal('recharge')
+  public setSeaY(seaY: number) {
+    this.seaY = seaY
   }
 
+  /** Contact with any surface recharges; feedback only fires when something was used up. */
+  public touchedSurface() {
+    const { state, restored } = recharge(this.pilot)
+    this.pilot = state
+    if (restored && this.localPlayer) this.emitLocal('recharge')
+  }
+
+  /** Full charge and no pending presses, e.g. when snapped to a start slot. */
+  public resetPilot() {
+    this.pilot = { ...freshPilot(), facing: this.pilot.facing }
+    this.clearLatches()
+  }
+
+  private clearLatches() {
+    this.latches = { flap: false, dash: false, stall: false }
+  }
+
+  private bumped(other: PhysicsSprite) {
+    const remote = this.remotePlayers.find((player) => player.sprite === other)
+    const local = this.localPlayer
+    if (!remote || !local) return
+    if (!this.bumps.tryBump(remote.id, this.steps * STEP_MS)) return
+    const v = bumpVelocity(
+      { id: local.id, x: local.sprite.body.center.x, y: local.sprite.body.center.y },
+      { id: remote.id, x: other.body.center.x, y: other.body.center.y },
+    )
+    local.sprite.body.setVelocity(v.x, v.y)
+    this.feel.emit({
+      kind: 'collision',
+      playerId: local.id,
+      otherId: remote.id,
+      x: (local.sprite.body.center.x + other.body.center.x) / 2,
+      y: (local.sprite.body.center.y + other.body.center.y) / 2,
+    })
+    this.touchedSurface()
+  }
+
+  // Positions come from the body: during a frame that runs several physics steps the sprite only
+  // catches up after the last one
   private emitLocal(kind: 'flap' | 'stall' | 'recharge') {
     const { id: playerId, sprite } = this.localPlayer
-    this.feel.emit({ kind, playerId, x: sprite.x, y: sprite.y })
+    this.feel.emit({ kind, playerId, x: sprite.body.center.x, y: sprite.body.center.y })
   }
 
   private emitDash(dir: 1 | -1) {
     const { id: playerId, sprite } = this.localPlayer
-    this.feel.emit({ kind: 'dash', playerId, x: sprite.x, y: sprite.y, dir })
-  }
-
-  private addRemotePlayer(player: Player) {
-    this.remotePlayers.push(player)
+    this.feel.emit({ kind: 'dash', playerId, x: sprite.body.center.x, y: sprite.body.center.y, dir })
   }
 
   public addPlayer(
@@ -164,14 +218,14 @@ export class PlayerManager {
       color,
       name,
       isLocal,
-      playerConfig.physics.maxSpeed,
+      BODY.maxSpeed,
       this.quality,
     )
 
     if (isLocal) {
       this.addLocalPlayer(player)
     } else {
-      this.addRemotePlayer(player)
+      this.remotePlayers.push(player)
     }
   }
 
@@ -188,18 +242,17 @@ export class PlayerManager {
   }
 
   private addPhysics(player: Player) {
-    this.scene.physics.add.existing(player.sprite)
+    // Remote orbs join the group first, since adding to a physics group resets body settings
+    if (player.isLocal) this.scene.physics.add.existing(player.sprite)
+    else this.remoteGroup.add(player.sprite)
 
-    player.sprite.body.setCircle(
-      playerConfig.hitboxOffset,
-      playerConfig.hitboxOffset,
-      playerConfig.hitboxOffset,
-    )
-    player.sprite.body.setFriction(playerConfig.physics.friction, playerConfig.physics.friction)
-    player.sprite.body.setDrag(playerConfig.physics.drag, playerConfig.physics.drag)
-    player.sprite.body.setCollideWorldBounds(true)
-    player.sprite.body.setBounce(playerConfig.physics.bounce, playerConfig.physics.bounce)
-    player.sprite.body.setMaxSpeed(playerConfig.physics.maxSpeed)
+    const body = player.sprite.body
+    body.setCircle(playerConfig.hitboxOffset, playerConfig.hitboxOffset, playerConfig.hitboxOffset)
+    body.setFriction(BODY.friction, BODY.friction)
+    body.setDrag(BODY.drag, BODY.drag)
+    body.setCollideWorldBounds(true)
+    body.setBounce(BODY.bounce, BODY.bounce)
+    body.setMaxSpeed(BODY.maxSpeed)
   }
 
   public updateGameState(players: Array<PlayerDataMessage>) {
@@ -210,19 +263,19 @@ export class PlayerManager {
     })
   }
 
-  private getPlayerPosition(player: Player): PlayerMoveMessage | undefined {
+  private getPlayerPosition = (player: Player): PlayerMoveMessage | undefined => {
     let playerPostion: PlayerMoveMessage | undefined = undefined
-    if (Math.abs(lastX - player.sprite.x) > 1 || Math.abs(lastY - player.sprite.y) > 1) {
+    const { x, y } = player.sprite
+    if (Math.abs(this.lastSent.x - x) > 1 || Math.abs(this.lastSent.y - y) > 1) {
       playerPostion = {
         playerId: player.id,
-        x: player.sprite.x,
-        y: player.sprite.y,
+        x,
+        y,
         velocityX: player.sprite.body.velocity.x,
         velocityY: player.sprite.body.velocity.y,
       }
     }
-    lastX = player.sprite.x
-    lastY = player.sprite.y
+    this.lastSent = { x, y }
     return playerPostion
   }
 
@@ -247,6 +300,7 @@ export class PlayerManager {
     const playerToRemove = this.remotePlayers.find((player) => player.id === id)
     playerToRemove?.sprite.destroy()
     playerToRemove?.visuals.destroy()
+    this.bumps.forget(id)
 
     const index = this.remotePlayers.indexOf(playerToRemove as Player, 0)
     if (index > -1) {
@@ -255,101 +309,50 @@ export class PlayerManager {
     }
   }
 
-  public update() {
-    this.scene.physics.collide(
-      this.remotePlayers.map((player) => player.sprite).concat(this.localPlayer.sprite),
-      undefined,
-      (p1, p2) => {
-        const body1 = p1 as Phaser.Types.Physics.Arcade.GameObjectWithBody
-        const body2 = p2 as Phaser.Types.Physics.Arcade.GameObjectWithBody
-        if (body1.body === this.localPlayer.sprite.body || body2.body === this.localPlayer.sprite.body) {
-          const otherBody = body1.body === this.localPlayer.sprite.body ? body2.body : body1.body
-          const other = this.remotePlayers.find((player) => player.sprite.body === otherBody)
-          if (other) {
-            this.feel.emit({
-              kind: 'collision',
-              playerId: this.localPlayer.id,
-              otherId: other.id,
-              x: body1.body.center.x,
-              y: body1.body.center.y,
-            })
-          }
-          this.recharge()
-
-          if (body1.body.x > body2.body.x) {
-            body1.body.velocity.add({ x: 500, y: 800})
-            body2.body.velocity.add({ x: -500, y: 800})
-          } else {
-            body1.body.velocity.add({ x: -500, y: 800})
-            body2.body.velocity.add({ x: 500, y: 800})
-          }
-        }
-      },
-    )
-
-    //controls
-    if (this.jump()) {
-      this.localPlayer.sprite.body.setVelocityY(-playerConfig.physics.jumpVelocity)
-      this.emitLocal('flap')
-    } else {
-      this.localPlayer.sprite.body.setAccelerationY(0)
+  /**
+   * One physics step for the local orb, run on 'worldstep' after the step has moved bodies and
+   * resolved contacts. Velocities set here take effect on the next step. While `locked` (start
+   * countdown) presses are dropped and nothing is applied.
+   */
+  public step(locked: boolean) {
+    this.steps++
+    const player = this.localPlayer
+    if (!player) return
+    const body = player.sprite.body
+    if (locked) {
+      this.clearLatches()
+      body.setAccelerationX(0)
+      return
     }
 
-    if (this.openScoreboard()) {
+    const input: InputFrame = {
+      left: this.controls.left.some((key) => key.isDown),
+      right: this.controls.right.some((key) => key.isDown),
+      flapPressed: this.latches.flap,
+      dashPressed: this.latches.dash,
+      stallPressed: this.latches.stall,
+    }
+    this.clearLatches()
+
+    const out = stepPilot(this.pilot, input, { x: body.velocity.x, y: body.velocity.y })
+    this.pilot = out.state
+    const velocity = body.center.y > this.seaY ? seaDrag(out.velocity) : out.velocity
+    body.setVelocity(velocity.x, velocity.y)
+    body.setAccelerationX(out.accelX)
+
+    out.events.forEach((e) => {
+      if (e.kind === 'dash') this.emitDash(e.dir)
+      else this.emitLocal(e.kind)
+    })
+  }
+
+  /** Per display frame: UI-only keys. */
+  public update() {
+    if (Phaser.Input.Keyboard.JustDown(this.controls.scoreboard)) {
       this.scene.events.emit('openScoreboard')
-    } else if (this.closeScoreboard()) {
+    } else if (Phaser.Input.Keyboard.JustUp(this.controls.scoreboard)) {
       this.scene.events.emit('closeScoreboard')
     }
-
-    if (this.right()) {
-      this.localPlayer.sprite.body.setAccelerationX(playerConfig.physics.acceleration)
-      if (this.dash()) {
-        this.localPlayer.sprite.body.setVelocityX(playerConfig.physics.dashSpeed)
-        this.state.dashes -= 1
-        this.emitDash(1)
-      }
-    } else if (this.left()) {
-      this.localPlayer.sprite.body.setAccelerationX(-playerConfig.physics.acceleration)
-      if (this.dash()) {
-        this.localPlayer.sprite.body.setVelocityX(-playerConfig.physics.dashSpeed)
-        this.state.dashes -= 1
-        this.emitDash(-1)
-      }
-    } else if (this.stall()) {
-      this.localPlayer.sprite.body.setVelocity(0, 0)
-      this.state.canStall = false
-      this.emitLocal('stall')
-    } else {
-      this.localPlayer.sprite.body.setAccelerationX(0)
-    }
-  }
-
-  private stall() {
-    return this.state.canStall && Phaser.Input.Keyboard.DownDuration(this.controls.stall, 500)
-  }
-
-  private dash() {
-    return this.state.dashes > 0 && Phaser.Input.Keyboard.JustDown(this.controls.dash)
-  }
-
-  private jump() {
-    return this.controls.jump.some((key) => Phaser.Input.Keyboard.JustDown(key))
-  }
-
-  private left() {
-    return this.controls.left.some((key) => key.isDown)
-  }
-
-  private right() {
-    return this.controls.right.some((key) => key.isDown)
-  }
-
-  private openScoreboard() {
-    return Phaser.Input.Keyboard.JustDown(this.controls.scoreboard)
-  }
-
-  private closeScoreboard() {
-    return Phaser.Input.Keyboard.JustUp(this.controls.scoreboard)
   }
 
   /** Runs on the scene's post-update, after the physics step has moved the sprites. */

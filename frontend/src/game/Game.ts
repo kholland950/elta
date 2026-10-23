@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import { HUDScene } from './HUDScene'
 import { MainScene } from './MainScene'
+import { GRAVITY, STEP_HZ } from './race/tuning'
 
 const gameConfig: Phaser.Types.Core.GameConfig = {
   title: 'elta',
@@ -15,7 +16,10 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
     default: 'arcade',
     arcade: {
       // debug: true,
-      gravity: { x: 0, y: 2000 },
+      gravity: { x: 0, y: GRAVITY },
+      // Fixed physics rate: movement rules run once per step on 'worldstep', so the game plays
+      // the same at any display refresh rate
+      fps: STEP_HZ,
     },
   },
 
@@ -26,7 +30,12 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
 }
 
 const startGame = () => {
-  return new Phaser.Game(gameConfig)
+  const game = new Phaser.Game(gameConfig)
+  // Test hook: `?debugGame` exposes the game so a headless browser can inspect live state
+  if (new URLSearchParams(window.location.search).has('debugGame')) {
+    ;(window as unknown as { __PHASER_GAME__: Phaser.Game }).__PHASER_GAME__ = game
+  }
+  return game
 }
 
 export { startGame }
