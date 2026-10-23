@@ -101,7 +101,7 @@ export class PlayerManager {
         keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
       ],
       dash: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-      stall: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
+      stall: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.E),
       scoreboard: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
     }
   }
