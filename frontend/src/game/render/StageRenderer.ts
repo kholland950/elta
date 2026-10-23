@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { GLOW_PASSES, STAGE_PALETTE } from 'game/fx/stagePalette'
-import type { Rect, Stage } from 'game/race/stage'
+import type { FinishGate, Rect, Stage } from 'game/race/stage'
 
 const STAGE_DEPTH = -2
 const FINISH_DEPTH = -1
@@ -22,7 +22,7 @@ const clipX = (r: Rect, x0: number, x1: number): Rect | undefined => {
  */
 export class StageRenderer {
   private chunks: Array<{ x0: number; x1: number; graphics: Phaser.GameObjects.Graphics }> = []
-  private finish: Phaser.GameObjects.Graphics
+  private finish?: Phaser.GameObjects.Graphics
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -34,7 +34,8 @@ export class StageRenderer {
       const x1 = Math.min(bounds.x + bounds.w, x0 + CHUNK_W)
       this.chunks.push({ x0, x1, graphics: this.drawChunk(stage, interiors, x0, x1) })
     }
-    this.finish = this.drawFinish(stage)
+    // The lobby room has no finish
+    if (stage.finish) this.finish = this.drawFinish(stage.finish)
     scene.events.on(Phaser.Scenes.Events.PRE_RENDER, this.cull, this)
   }
 
@@ -68,9 +69,8 @@ export class StageRenderer {
     return g
   }
 
-  private drawFinish(stage: Stage) {
+  private drawFinish({ x, top, bottom }: FinishGate) {
     const g = this.scene.add.graphics().setDepth(FINISH_DEPTH).setBlendMode(Phaser.BlendModes.ADD)
-    const { x, top, bottom } = stage.finish
     for (const { width, alpha } of GLOW_PASSES) {
       g.lineStyle(width * 2, STAGE_PALETTE.finish, alpha)
       g.lineBetween(x, top, x, bottom)
@@ -95,6 +95,6 @@ export class StageRenderer {
     this.scene.events.off(Phaser.Scenes.Events.PRE_RENDER, this.cull, this)
     for (const chunk of this.chunks) chunk.graphics.destroy()
     this.chunks = []
-    this.finish.destroy()
+    this.finish?.destroy()
   }
 }

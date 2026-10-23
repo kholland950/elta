@@ -11,6 +11,9 @@ export const STAGE_PALETTE = {
   seaFillAlpha: 0.38,
   seaEdge: 0x5ff6ff,
   finish: 0xf4ff6b,
+  /** Start-bay gate barrier: hot orange-red (a stop light), with a near-white core. */
+  gate: 0xff6a3d,
+  gateCore: 0xffe2d6,
 } as const
 
 /** Glow passes for a neon edge, widest and faintest first; the last is the crisp core line. */

@@ -1,9 +1,10 @@
 import Phaser from 'phaser'
 import { HUDScene } from './HUDScene'
 import { MainScene } from './MainScene'
+import type { RoomConnection } from './net/RoomConnection'
 import { GRAVITY, STEP_HZ } from './race/tuning'
 
-const gameConfig: Phaser.Types.Core.GameConfig = {
+const gameConfig = (conn?: RoomConnection): Phaser.Types.Core.GameConfig => ({
   title: 'elta',
 
   type: Phaser.AUTO,
@@ -26,11 +27,16 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
   parent: 'game',
   backgroundColor: '#000000',
 
-  scene: [MainScene, HUDScene],
-}
+  // The game scene gets the connection at construction so it can subscribe before it loads
+  scene: [new MainScene(conn), HUDScene],
+})
 
-const startGame = () => {
-  const game = new Phaser.Game(gameConfig)
+/**
+ * Starts the game in a room. Without a connection it runs a solo stage from `?seed=`/`?diff=`
+ * (R for a new one), for development and headless checks.
+ */
+const startGame = (conn?: RoomConnection) => {
+  const game = new Phaser.Game(gameConfig(conn))
   // Test hook: `?debugGame` exposes the game so a headless browser can inspect live state
   if (new URLSearchParams(window.location.search).has('debugGame')) {
     ;(window as unknown as { __PHASER_GAME__: Phaser.Game }).__PHASER_GAME__ = game

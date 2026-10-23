@@ -18,13 +18,25 @@ export const LOWEST_FLOOR = -4
 /** Highest open row (3000 px above the sea). */
 export const HIGHEST_ROW = -60
 export const START_FLOOR = -6
-export const START_SLOTS = 8
-export const START_SLOT_SPACING = 64
+/** Start bays: one per player in the round, stacked upward from the start floor. */
+export const MIN_BAYS = 1
+export const MAX_BAYS = 8
+/** Bay interior height and the pitch between bay floors (one row of rock between bays). */
+export const BAY_ROWS = 2
+export const BAY_PITCH = 3
+/** Bay depth in cells, from the stage's left wall to the bay's opening. */
+export const BAY_COLS = 4
+/** The start room's width in cells: the bay stack plus the shared start chamber. */
+export const START_COLS = 14
+/** Gate barrier thickness in px, just inside each bay's opening. */
+export const GATE_W = 16
+/** Spawn x inside a bay (orb centre), clear of the gate. */
+export const BAY_SPAWN_X = 80
 /** Par speeds: average travel and climbing speed of a decent run. */
 export const PAR_RUN_SPEED = 600
 export const PAR_CLIMB_SPEED = 300
 
-export type BuildableType = Exclude<SegmentType, 'start' | 'finish'>
+export type BuildableType = Exclude<SegmentType, 'start' | 'finish' | 'lobby'>
 export const BUILDABLE_TYPES: ReadonlyArray<BuildableType> = ['run', 'shaftUp', 'shaftDown', 'stallChamber']
 
 /** A tunnel mouth in cells: open rows [top, bottom) entering column x. */
@@ -71,30 +83,60 @@ const par = (cellsAcross: number, cellsUp: number) =>
 
 const clampFloor = (row: number) => Math.max(HIGHEST_ROW + 8, Math.min(LOWEST_FLOOR, row))
 
-/** Orb centres for the start, stacked upward above the left of the start chamber floor. */
-export const startSlotsAbove = (floorRow: number): Array<Point> => {
-  const slots: Array<Point> = []
-  for (let i = 0; i < START_SLOTS; i++) {
-    slots.push({ x: 160, y: floorRow * CELL - ORB_RADIUS - 1 - i * START_SLOT_SPACING })
-  }
-  return slots
+/** Bay count for a round: one per player in `startOrder`, clamped to 1–8. */
+export const clampBays = (n: number): number =>
+  Math.max(MIN_BAYS, Math.min(MAX_BAYS, Number.isFinite(n) ? Math.floor(n) : MIN_BAYS))
+
+/** Floor row of bay i (bay 0 sits on the start floor). */
+export const bayFloor = (i: number) => START_FLOOR - i * BAY_PITCH
+
+/** A bay in cells: its open rows and spawn and gate in px. */
+export interface CellBay {
+  room: CellRect
+  spawn: Point
+  gate: { x: number; y: number; w: number; h: number }
 }
 
-/** The start chamber: tall enough for the stacked start slots, with a tunnel mouth on the right. */
-export const planStart = (): SegmentPlan => {
+export const planBays = (bays: number): Array<CellBay> => {
+  const out: Array<CellBay> = []
+  for (let i = 0; i < bays; i++) {
+    const f = bayFloor(i)
+    out.push({
+      room: rect(0, f - BAY_ROWS, BAY_COLS, f),
+      spawn: { x: BAY_SPAWN_X, y: f * CELL - ORB_RADIUS - 1 },
+      gate: { x: BAY_COLS * CELL - GATE_W, y: (f - BAY_ROWS) * CELL, w: GATE_W, h: BAY_ROWS * CELL },
+    })
+  }
+  return out
+}
+
+/**
+ * The start: a vertical stack of gate bays on the left, each opening right into one shared start
+ * chamber, whose tunnel mouth on the right sits level with the middle of the stack (so no bay is
+ * much further from it than another). With one or two bays the mouth is on the chamber floor.
+ */
+export const planStart = (bays: number): { plan: SegmentPlan; bays: Array<CellBay> } => {
   const f = START_FLOOR
-  const room = rect(0, f - 12, 14, f)
+  const cellBays = planBays(clampBays(bays))
+  const topBay = cellBays[cellBays.length - 1].room.r0
+  const room = rect(BAY_COLS, Math.min(f - 12, topBay - 2), START_COLS, f)
+  const mid = Math.floor((f + topBay) / 2)
+  const bottom = Math.min(f, mid + 3)
+  const exit = { x: START_COLS, top: bottom - 5, bottom }
   return {
-    type: 'start',
-    entry: { x: 0, top: f - 12, bottom: f },
-    exit: { x: 14, top: f - 5, bottom: f },
-    carves: [room],
-    tunnels: [],
-    chambers: [room],
-    pads: [],
-    pitCols: [],
-    spine: [startSlotsAbove(f)[0], floorPoint(13, 14, f)],
-    parMs: par(14 - 3, 0),
+    plan: {
+      type: 'start',
+      entry: { x: 0, top: room.r0, bottom: f },
+      exit,
+      carves: [...cellBays.map((b) => b.room), room],
+      tunnels: [],
+      chambers: [...cellBays.map((b) => b.room), room],
+      pads: [],
+      pitCols: [],
+      spine: [cellBays[0].spawn, floorPoint(START_COLS - 1, START_COLS, bottom)],
+      parMs: par(START_COLS - 3, 0),
+    },
+    bays: cellBays,
   }
 }
 

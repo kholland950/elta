@@ -32,6 +32,8 @@ const HALO_ALPHA = 0.45
 const PULSE_SCALE = 0.6
 const PULSE_ALPHA = 0.35
 const PULSE_MS = 280
+// Extra scale of an orb that has fully faded out (it swells as it disintegrates)
+const VANISH_SWELL = 0.8
 
 // maxAliveParticles caps particles on screen; maxParticles would cap the lifetime total and
 // stop the trail for good once reached
@@ -83,6 +85,9 @@ export class PlayerVisuals {
   private angle = 0
   private pulseAmount = 0
   private pulseTween?: Phaser.Tweens.Tween
+  /** 1 when fully here, 0 when gone (disintegrated, or a remote orb not yet placed). */
+  private presence = 1
+  private presenceTween?: Phaser.Tweens.Tween
 
   constructor(
     scene: Phaser.Scene,
@@ -174,12 +179,36 @@ export class PlayerVisuals {
     })
   }
 
+  /** Shows or hides the orb at once. */
+  public setPresence(presence: number) {
+    this.presenceTween?.remove()
+    this.presenceTween = undefined
+    this.presence = presence
+  }
+
+  /** Fades the orb out (swelling as it goes) or back in over `ms`. */
+  public fadePresence(to: number, ms: number) {
+    this.presenceTween?.remove()
+    this.presenceTween = this.scene.tweens.addCounter({
+      from: this.presence,
+      to,
+      duration: ms,
+      ease: to < this.presence ? 'Quad.easeIn' : 'Quad.easeOut',
+      onUpdate: (tween) => (this.presence = tween.getValue() ?? to),
+      onComplete: () => {
+        this.presence = to
+        this.presenceTween = undefined
+      },
+    })
+  }
+
   /** Call after the physics step so the visuals match this frame's body position. */
   public update() {
     const { x, y } = this.target
     const { x: vx, y: vy } = this.target.body.velocity
 
-    if (Math.abs(vx) > MOVING_SPEED || Math.abs(vy) > MOVING_SPEED) {
+    // No trail from an orb that isn't there
+    if (this.presence > 0.5 && (Math.abs(vx) > MOVING_SPEED || Math.abs(vy) > MOVING_SPEED)) {
       this.emitTrail(x, y)
     }
     this.lastX = x
@@ -189,23 +218,27 @@ export class PlayerVisuals {
     this.stretch += (shape.scaleX - this.stretch) * SHAPE_LERP
     if (shape.scaleX !== 1) this.angle = shape.angle
 
-    const sx = this.stretch
-    const sy = 1 / this.stretch
+    // Fading out, the orb swells as it comes apart
+    const swell = 1 + VANISH_SWELL * (1 - this.presence)
+    const sx = this.stretch * swell
+    const sy = swell / this.stretch
     const haloScale = HALO_SCALE * (1 + PULSE_SCALE * this.pulseAmount)
     this.halo
       .setPosition(x, y)
       .setScale(haloScale * sx, haloScale * sy)
       .setRotation(this.angle)
-      .setAlpha(Math.min(1, HALO_ALPHA + PULSE_ALPHA * this.pulseAmount))
+      .setAlpha(Math.min(1, HALO_ALPHA + PULSE_ALPHA * this.pulseAmount) * this.presence)
     this.orb
       .setPosition(x, y)
       .setScale(ORB_SCALE * sx, ORB_SCALE * sy)
       .setRotation(this.angle)
+      .setAlpha(this.presence)
     this.core
       .setPosition(x, y)
       .setScale(this.coreScale * sx, this.coreScale * sy)
       .setRotation(this.angle)
-    this.label.setPosition(x, y - LABEL_OFFSET_Y)
+      .setAlpha(this.presence)
+    this.label.setPosition(x, y - LABEL_OFFSET_Y).setAlpha(this.presence)
   }
 
   private emitTrail(x: number, y: number) {
@@ -231,6 +264,7 @@ export class PlayerVisuals {
 
   public destroy() {
     this.pulseTween?.remove()
+    this.presenceTween?.remove()
     this.trail.destroy()
     this.ignition?.destroy()
     this.halo.destroy()

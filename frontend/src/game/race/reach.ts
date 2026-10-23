@@ -97,16 +97,19 @@ export const reachFrom = (g: CellGrid, starts: ReadonlyArray<number>, opts: Reac
 }
 
 export interface StageReach {
-  /** Some finish cell is reachable from the start. */
+  /** Some finish cell is reachable from every start (every bay). */
   startToFinish: boolean
-  /** The orb can get from the start into the sea (through a chamber pit). */
+  /** Starts (by index) from which no finish cell is reachable. */
+  stuckStarts: Array<number>
+  /** The orb can get from some start into the sea (through a chamber pit). */
   seaReachableFromStart: boolean
   /** From the sea floor the finish is reachable again: the sea is never a softlock. */
   seaToFinish: boolean
 }
 
 export interface ReachTargets {
-  start: number
+  /** One cell per start bay; each must reach the finish. */
+  starts: ReadonlyArray<number>
   /** Cell indices inside the finish gate. */
   finish: ReadonlyArray<number>
 }
@@ -116,17 +119,22 @@ export interface ReachTargets {
  * single run from any sea-floor cell stands for every sea node.
  */
 export const checkGrid = (g: CellGrid, targets: ReachTargets, opts: ReachOptions): StageReach => {
-  const fromStart = reachFrom(g, [targets.start], opts)
   const seaFloorRow = g.row0 + g.rows - 1
   let seaReachableFromStart = false
-  for (let col = g.col0; col < g.col0 + g.cols && !seaReachableFromStart; col++) {
-    for (let row = 0; row <= seaFloorRow; row++) {
-      if (fromStart[(row - g.row0) * g.cols + (col - g.col0)] >= 0) seaReachableFromStart = true
+  const stuckStarts: Array<number> = []
+  targets.starts.forEach((start, index) => {
+    const fromStart = reachFrom(g, [start], opts)
+    if (!targets.finish.some((i) => fromStart[i] >= 0)) stuckStarts.push(index)
+    for (let col = g.col0; col < g.col0 + g.cols && !seaReachableFromStart; col++) {
+      for (let row = 0; row <= seaFloorRow; row++) {
+        if (fromStart[(row - g.row0) * g.cols + (col - g.col0)] >= 0) seaReachableFromStart = true
+      }
     }
-  }
+  })
   const fromSea = reachFrom(g, [(seaFloorRow - g.row0) * g.cols], opts)
   return {
-    startToFinish: targets.finish.some((i) => fromStart[i] >= 0),
+    startToFinish: targets.starts.length > 0 && stuckStarts.length === 0,
+    stuckStarts,
     seaReachableFromStart,
     seaToFinish: targets.finish.some((i) => fromSea[i] >= 0),
   }

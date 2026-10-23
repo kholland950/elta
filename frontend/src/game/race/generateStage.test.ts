@@ -1,24 +1,54 @@
 import { describe, expect, it } from 'vitest'
 import { difficultyKnobs } from './difficulty'
-import { generateStage, planPassable } from './generateStage'
+import { checkStage, generateStage, planPassable } from './generateStage'
 import { createRng } from './rng'
-import { CELL, planRun, planShaftDown, planShaftUp, planStallChamber } from './segments'
-import { hashStage } from './stageSweep'
+import { CELL, clampBays, MAX_BAYS, planRun, planShaftDown, planShaftUp, planStallChamber } from './segments'
+import { checkBays, hashStage } from './stageSweep'
 
 const DIFFICULTIES = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 describe('generateStage', () => {
+  // Updated on purpose for the gate-bay start (slice 2 review): the start room, the stage's
+  // `kind`/`bays` fields and, for 3+ bays, the start mouth height all changed
   it('matches hash snapshots for three seeds', () => {
-    expect([generateStage(1, 1), generateStage(42, 4), generateStage(9001, 10)].map(hashStage))
+    expect([generateStage(1, 1, 1), generateStage(42, 4, 2), generateStage(9001, 10, 8)].map(hashStage))
       .toMatchInlineSnapshot(`
         [
-          "c1e92478",
-          "182878e0",
-          "e673bf30",
+          "55dd9412",
+          "278be7d4",
+          "73a6b10c",
         ]
       `)
   })
 
+  it('clamps the bay count to 1–8', () => {
+    expect([0, 1, 3, 8, 9, 20, -2, NaN].map(clampBays)).toEqual([1, 1, 3, 8, 8, 8, 1, 1])
+    expect(generateStage(5, 4, 0).bays.length).toBe(1)
+    expect(generateStage(5, 4, 12).bays.length).toBe(MAX_BAYS)
+  })
+
+  it('builds the same stage for the same seed, difficulty and bays', () => {
+    expect(hashStage(generateStage(77, 6, 5))).toBe(hashStage(generateStage(77, 6, 5)))
+    expect(hashStage(generateStage(77, 6, 5))).not.toBe(hashStage(generateStage(77, 6, 6)))
+  })
+
+  // The sweep files cycle the bay count by seed; this runs every count on the same seeds
+  it('is passable from every bay for every bay count', { timeout: 60000 }, () => {
+    const bad: Array<string> = []
+    for (const d of [1, 4, 7, 10]) {
+      for (let seed = 1; seed <= 25; seed++) {
+        for (let bays = 1; bays <= MAX_BAYS; bays++) {
+          const s = generateStage(seed * 40503, d, bays)
+          const why = checkBays(s, bays)
+          const reach = checkStage(s)
+          if (why) bad.push(`seed ${seed} d${d} bays ${bays}: ${why}`)
+          if (!reach.startToFinish) bad.push(`seed ${seed} d${d} bays ${bays}: stuck in ${reach.stuckStarts.join(', ')}`)
+          if (reach.seaReachableFromStart && !reach.seaToFinish) bad.push(`seed ${seed} d${d} bays ${bays}: sea softlock`)
+        }
+      }
+    }
+    expect(bad.slice(0, 5)).toEqual([])
+  })
 })
 
 describe('segment templates', () => {

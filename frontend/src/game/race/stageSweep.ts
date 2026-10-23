@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { checkStage, generateStage } from './generateStage'
-import type { Rect, Stage } from './stage'
+import { OPEN, SOLID } from './grid'
+import { MAX_BAYS } from './segments'
+import type { RaceStage, Rect, Stage } from './stage'
 import { ORB_RADIUS } from './tuning'
 
 export const SEEDS = 500
@@ -42,26 +44,66 @@ const inside = (r: Rect, b: Rect) =>
 
 const isInt = (n: number) => Number.isInteger(n)
 
+/** Bay count the sweep uses for a seed: every count from 1 to 8 comes round in turn. */
+export const sweepBays = (seed: number) => 1 + (seed % MAX_BAYS)
+
 /**
- * The generator property sweep: SEEDS seeds at the given difficulties. Split across several test
- * files (two difficulties each) so vitest runs the slices in parallel workers.
+ * Whether the start bays are laid out as specified: one spawn per bay, each bay a closed box
+ * (back wall, floor, ceiling) whose only opening is on the right, where its gate sits across open
+ * cells, and the opening leads into open space. Returns why not, or undefined.
+ */
+export const checkBays = (s: RaceStage, bays: number): string | undefined => {
+  if (s.bays.length !== bays || s.startSlots.length !== bays) return `${s.bays.length} bays, wanted ${bays}`
+  const g = s.grid
+  const cellOf = (x: number, y: number) => {
+    const col = Math.floor(x / s.cell)
+    const row = Math.floor(y / s.cell)
+    return g.cells[(row - g.row0) * g.cols + (col - g.col0)]
+  }
+  for (let i = 0; i < s.bays.length; i++) {
+    const { spawn, gate } = s.bays[i]
+    if (spawn.x !== s.startSlots[i].x || spawn.y !== s.startSlots[i].y) return `bay ${i} spawn is not slot ${i}`
+    if (![gate.x, gate.y, gate.w, gate.h].every(isInt)) return `bay ${i} gate not integer`
+    if (spawn.x >= gate.x) return `bay ${i} spawn outside its gate`
+    if (spawn.y < gate.y || spawn.y > gate.y + gate.h) return `bay ${i} spawn not level with its gate`
+    if (i > 0 && s.bays[i - 1].gate.y < gate.y + gate.h) return `bay ${i} not stacked above bay ${i - 1}`
+    const c = s.cell / 2
+    for (let y = gate.y + c; y < gate.y + gate.h; y += s.cell) {
+      if (cellOf(gate.x + gate.w / 2, y) !== OPEN) return `bay ${i} gate across rock`
+      if (cellOf(gate.x + gate.w + c, y) !== OPEN) return `bay ${i} opening is blocked`
+      if (cellOf(-c, y) !== SOLID) return `bay ${i} has no back wall`
+    }
+    for (let x = c; x < gate.x + gate.w; x += s.cell) {
+      if (cellOf(x, gate.y - c) !== SOLID) return `bay ${i} has no ceiling`
+      if (cellOf(x, gate.y + gate.h + c) !== SOLID) return `bay ${i} has no floor`
+    }
+  }
+  return undefined
+}
+
+/**
+ * The generator property sweep: SEEDS seeds at the given difficulties, with the bay count cycling
+ * through 1–8 by seed. Split across several test files (two difficulties each) so vitest runs the
+ * slices in parallel workers.
  */
 export const defineSweep = (difficulties: ReadonlyArray<number>) => {
   /** Every seed × difficulty, generated once and shared by the property checks below. */
-  const stages: Array<Stage> = []
+  const stages: Array<RaceStage> = []
   for (const d of difficulties) {
-    for (let seed = 1; seed <= SEEDS; seed++) stages.push(generateStage(seed * 2654435761, d))
+    for (let seed = 1; seed <= SEEDS; seed++) stages.push(generateStage(seed * 2654435761, d, sweepBays(seed)))
   }
 
-  const failures = (check: (s: Stage) => string | undefined) =>
+  const failures = (check: (s: RaceStage) => string | undefined) =>
     stages.flatMap((s) => {
       const why = check(s)
-      return why ? [`seed ${s.seed} diff ${s.difficulty}: ${why}`] : []
+      return why ? [`seed ${s.seed} diff ${s.difficulty} bays ${s.bays.length}: ${why}`] : []
     })
 
   describe(`generateStage sweep, difficulty ${difficulties.join(', ')}`, { timeout: 120000 }, () => {
     it('is deterministic', () => {
-      const bad = failures((s) => (hashStage(generateStage(s.seed, s.difficulty)) === hashStage(s) ? undefined : 'differs'))
+      const bad = failures((s) =>
+        hashStage(generateStage(s.seed, s.difficulty, s.bays.length)) === hashStage(s) ? undefined : 'differs',
+      )
       expect(bad.slice(0, 5)).toEqual([])
     })
 
@@ -135,11 +177,20 @@ export const defineSweep = (difficulties: ReadonlyArray<number>) => {
       expect(bad.slice(0, 5)).toEqual([])
     })
 
-    it('is traversable from the start, and from the sea whenever the sea can be reached', () => {
+    it('covers every bay count from 1 to 8', () => {
+      expect([...new Set(stages.map((s) => s.bays.length))].sort()).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
+    })
+
+    it('lays out one closed start bay per player, gate across its opening', () => {
+      const bad = failures((s) => checkBays(s, s.bays.length))
+      expect(bad.slice(0, 5)).toEqual([])
+    })
+
+    it('is traversable from every bay, and from the sea whenever the sea can be reached', () => {
       let withPits = 0
       const bad = failures((s) => {
         const reach = checkStage(s)
-        if (!reach.startToFinish) return 'finish unreachable from start'
+        if (!reach.startToFinish) return `finish unreachable from bays ${reach.stuckStarts.join(', ')}`
         const pits = s.segments.some((seg) => seg.pits.length > 0)
         if (pits) {
           withPits++

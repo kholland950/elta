@@ -48,6 +48,8 @@ The tech demo is a Ktor relay plus a Phaser 4 client. Energy orbs move, flap, da
 - A left-to-right spine of branches that split and rejoin as risk/reward choices.
 - **Shape (revised after the slice 1 play review, 2026-10-23):** stages are mostly **enclosed tunnels**. Each tunnel has a floor, a ceiling and walls, and twists up, down, left and right. Tunnels open into **small chambers** that hold the bounce, stall and other set pieces. There are lots of walls, little open space and few chances to fall. Branches are separate tunnels. Tunnel height **varies between 150 and 400 px** (a starting value; tighter at higher difficulty).
 - The **energy sea** is still the global floor and still adds drag. The tunnels float above it. You can only fall into the sea through openings at the bottom of chambers, and every chamber that opens onto the sea must have a way back up. There are no pits and no respawns.
+- **Start area (revised after the slice 2 review, 2026-10-23):** a stack of **gate bays**, one per player in the round, with one player per bay. The bay count comes from `roundStart.startOrder.length`, so the stage is a pure function of `(seed, difficulty, bays)`. **Explore:** each player spawns in their own bay with its gate open and can roam freely. **Snap:** each player returns to their bay and the gates shut (a glowing barrier). **GO:** all gates drop at once.
+- **Lobby (revised the same day):** a **fixed, hand-built room** about 2 screens wide, with a floor, a few platforms, walls and a bounce pad. It replaces the seed 0 sandbox.
 - **Recharge stays "any surface"**, walls included. This was confirmed with the corridor change in mind: in tunnels you'll nearly always be fully charged, so skill comes from routing and execution.
 - **Elements:** solid platforms, bounce pads, boost pads, moving platforms (driven by race time), and knockback hazards (which also refill).
 - **Stall slots** are optional shortcuts.
@@ -250,7 +252,7 @@ Across the wire: only DTOs (race/protocol.ts <-> ws/Protocol.kt)
   - 10 seeds can each be finished in about a minute.
   - **Play-feel review with the user before slice 2.**
 
-### [ ] Slice 2: rooms and match loop
+### [x] Slice 2: rooms and match loop
 - **Server:**
   - Kotlin `race/*` with unit tests first.
   - Then `ws/*` and the `Application.kt` root. Delete the old broker.
@@ -354,3 +356,69 @@ The stage generator was rebuilt for the enclosed-tunnel design. These notes repl
 - Stages come out about 25–28 k px wide with ~23 segments, around 110 solids and 300 edge lines. The renderer draws in 1600 px vertical strips, culled by x.
 - **Verified headless** (driven clock): the pad launch peaks at y −912.7 against a predicted −913, inside its 150 px mouth; bounce → stall (E) → dash (→ + Shift) lands in the exit tunnel; a bot bouncing between the walls of a shaft (flapping while switching the held direction) climbs it and leaves through the exit tunnel. Overlapping interior rectangles stack their tint, so lowered ceilings and shaft joins show slightly brighter patches (cosmetic; slice 4).
 
+
+### Slice 2: Phaser side (rooms and match loop)
+Deviations and choices made while building:
+- **`startGame(conn?)`**: with a `RoomConnection` the server drives the scene; without one the slice 1 solo round still runs (`?seed=`, `?diff=`, R), for development and headless checks. The connection is handed to the `MainScene` constructor (`scene: [new MainScene(conn), HUDScene]`).
+- **Subscribing early:** the contract asks Phaser to subscribe in `MainScene.create`, but `create` runs after asset loading, so `joined`, the first `roomState` or a `roundStart` could arrive first and are never replayed. The scene therefore subscribes to `joined`, `roomState`, `playerLeft`, `roundStart`, `skipVotes` and `roundEnd` in its constructor (which `startGame` calls synchronously) through `race/match.ts` `MatchTracker`, and only `playerMove`/`playerAction` in `create` (losing a few position updates is harmless). This is stricter than the contract, not a change to it.
+- **`race/match.ts`** (pure, tested with a fake connection): `reduceMatch` keeps the scene's view of the room (me, phase, players, current round, its end, votes). It overlaps with the frontend's `race/session.ts`, which was being written in parallel with no agreed signature; the two could be merged later. Also `stageFor` (sandbox seed 0 difficulty 1 in the lobby and before round 1, else the round's stage; a key per round triggers a rebuild), `startSlotIndex` (index in `startOrder`; a missing id goes after everyone, clamped to the 8 slots), `lobbySlotIndex` (join order, so the sandbox doesn't stack everyone on slot 0), `exploreLeftMs`, `canVoteSkip`, `shownVotes`.
+- **Phases** come from `roundPhaseAt(plan, conn.serverNow())` each physics step; race time still counts steps from the client's own GO step. `waiting` (before `exploreAt`) is free roam like explore. A client whose first race-phase step comes without a snap (tab asleep) is snapped to its slot at GO. The finish is reported once per round with the interpolated float time; the orb keeps its controls until `roundEnd`.
+- **Snap:** each client moves only its own orb, but at the snap the scene also places every remote orb at its slot locally so the stack looks right before their own updates arrive. The camera cuts to the slot instead of panning back.
+- **Round end:** controls lock and the local orb is **held where it was** (not just input-locked, so a disintegrated orb doesn't fall); remote bodies stop integrating their last velocity (`body.moves = false`). The winner celebrates (rings and a halo pulse, plus spark fountains unless reduced motion) and every other orb disintegrates (flash, rising shards in its colour, swell and fade). With no winner (timeout or skip) every orb disintegrates. Orbs reform on the next stage. New `render/RoundEndFX.ts`; `PlayerVisuals` gained a presence fade. Particle counts follow the quality level; with `prefers-reduced-motion` the celebration is a single ring and pulse and the shard burst is small.
+- **Remote orbs** come from `roomState.players` minus me, hidden and with their body disabled until their first `playerMove` places them, removed on `playerLeft` or when absent from `roomState`. "Joined"/"left" messages show in the HUD after the first roster. `MessageBroker.ts` and `messages.ts` are deleted; moves go out through `conn.sendMove` at 32 TPS (only once `joined` has arrived), actions through `conn.sendAction` (the id is stripped; the server stamps it).
+- **V** sends `voteSkip(round)` from `roundStart` until `roundEnd`. The HUD shows `V: vote skip votes/needed` bottom right (`voted` after pressing); before the first `skipVotes` it shows `0/players`.
+- **HUD:** `EXPLORE n` top centre during explore, then the existing 3-2-1 and race timer, `FINISH m:ss.mmm` for the own time, and a bottom-left line (`lobby sandbox | free roam`, or `round n | seed | difficulty`). A round skipped before GO drops its countdown; one ended mid-race freezes its clock.
+- `RaceDirector.ts` uses relative imports so vitest (which has no path aliases) can load it; `RaceDirector.test.ts` covers explore, snap, countdown hold, finish report once, the late snap, the end hold and the sandbox.
+- **Not verified at runtime** yet: no browser or server was run for this slice.
+
+### Slice 2 integration (2026-10-23)
+- Built by three agents in parallel against `orb-racer-slice2-contract.md`: kotlin-expert (server), frontend-developer (RoomConnection, clockSync, session, Svelte), phaser4-gamedev (round flow).
+- **Verified:**
+  - vitest: 204 tests, all passing. `tsc` reports 0 errors. The capped build succeeds.
+  - Kotlin: 50 tests, all passing.
+  - A two-browser end-to-end run against a real server (port 8081) took two players through the lobby, host Start, an identical seeded stage, explore, countdown and race, then one finish, `roundEnd`, and results on the other client. No page errors.
+- **Fixes during integration:**
+  - The `RoomFlowTest` relay test raced on a second `roomState`. It now waits for both players.
+  - "GO!" froze on screen when a round ended within 700 ms of GO. `Countdown` now hides it once the round has ended.
+- **Duplication (open):** `race/session.ts` (Svelte store) and `race/match.ts` (Phaser `MatchTracker`) both fold the same server messages into room state. The Phaser agent wrote its own reducer because `session.ts` had no agreed signature yet. Merge them into one reducer in a later slice.
+- **Not verified in a browser:** host migration, a mid-match join being rejected, the skip vote, the timeout, and the match ending and returning to the lobby. These are covered by Kotlin unit and integration tests only.
+
+### Slice 2 review: lobby room and start-bay gates (2026-10-23)
+Client only; the wire protocol is unchanged (the bay count comes from `roundStart.startOrder`).
+- **Lobby room** (`race/lobbyRoom.ts`): an ASCII map (`#` rock, `.` open, `^` pad, `1`–`8` spawns in join order), 72 × 20 cells = 3600 × 1000 px with a 3500 × 850 interior. It has a 150 px chimney on the left, floating platforms, a pillar hanging from the ceiling, a bounce pad beside a high ledge, and a 100 px chimney on the right. It goes through `mergeCells`/`boundaryEdges` into an ordinary `Stage` with `kind: 'lobby'`, no `finish` (now optional; `generateStage` returns `RaceStage`, which always has one), no bays and an empty spine. It sits directly on the sea surface, sealed. Spawns alternate out from the middle by join order. `stageFor` returns `{ key: 'lobby', kind: 'lobby' }`; `SANDBOX_STAGE` is gone.
+- **Bays** (`segments.ts` `planStart(bays)`, `clampBays`): `generateStage(seed, difficulty, bays)` with bays clamped to 1–8 (solo uses 1). Each bay is 4 × 2 cells (200 × 100 px), stacked upward from the start floor with one row of rock between bays (150 px pitch). All bays open right into a shared chamber (cols 4–14, at least 12 rows tall). **Deviation:** the chamber's exit mouth sits level with the middle of the stack, not on its floor (with 1–2 bays it stays on the floor). With the mouth on the floor, the top of 8 bays would be about 1 s of falling further from it than the bottom; centred, the worst case is about 450 px of climbing or falling. `Stage.bays[i] = { spawn, gate }`, `startSlots[i]` is bay i's spawn, and the gate is a 16 px barrier just inside the opening. 3+ bays change the whole stage, because the mouth moves.
+- **Reach:** `ReachTargets.starts` has one cell per bay and `startToFinish` requires every bay (`stuckStarts` lists the failures). The sweep cycles the bay count by seed (`1 + seed % 8`, so ~62 seeds per count per difficulty) and adds checks for bay layout (closed box, gate across open cells, opening clear) and coverage of 1–8. `generateStage.test.ts` runs every count 1–8 on 25 seeds × difficulties 1/4/7/10. Mutation-checked: a rock column between bays and chamber fails both the layout and the reach check. **Hash snapshots updated on purpose** (start room, `kind`/`bays` fields; seeds now `(1,1,1)`, `(42,4,2)`, `(9001,10,8)`).
+- **Gates:** `gateOpen(phase)` in `round.ts` is open in `explore` and `race`, shut in `waiting`, `snap` and `countdown` (tested: shut exactly when controls lock once explore has begun; solo countdown). `RaceDirector.gatesOpen` keeps its last value once a round ends, so a skipped round doesn't slam the gates. `StageWorld` adds the gates as a static group whose collider is active only while shut (contact recharges like any wall). `render/GateRenderer.ts` draws a hot orange-red barrier (`STAGE_PALETTE.gate`) between emitter caps: it shoots from both caps to the middle in 140 ms when shutting and drops back in 220 ms at GO, with a flare and sparks out of the bay. A shut barrier has drifting scan bands. Low quality drops the outer glow and uses fewer sparks; reduced motion swaps the sweep for a 120 ms fade, still bands, no sparks.
+- **Round flow:** in a server round the orb is **held in its bay** (locked, gates shut) during the ~500 ms `waiting` before `exploreAt`, starts explore there with the gate open (`onExplore`), and is held there again from the snap. Remote orbs are placed in their bays at `roundStart`, at explore and at the snap, and **pinned to them every step while everyone is held** (`RaceDirector.heldInBays`), so a stale in-flight update can't pull them out.
+- **Fixes found while verifying** (all client-side):
+  - `RaceDirector.place` moved only the body outside a physics step, which Arcade's per-frame `preUpdate` overwrites from the sprite. That is why orbs "stayed where they were in the lobby", and why lobby spawns never applied. Placement is now re-applied on the next step.
+  - Remote orbs no longer take gravity. They never collide with the stage, so they sank into the sea whenever their owner stopped sending (resting, or held in a bay). They now coast on the sent velocity, slowed by drag.
+  - Moves are only sent on change, so a newcomer never saw a player sitting still. `syncRemotes` now forces a resend when someone joins, and `MainScene` buffers `playerMove`s from construction until `create` (the old "losing a few is harmless" assumption was wrong for still players).
+  - `MainScene`'s destroy handler threw (`this.physics.world` is null when the whole game is destroyed, i.e. every room exit), skipping the rest of its cleanup. It is now guarded.
+- **Verified:**
+  - vitest 237 tests passing; `tsc` reports 0 errors; the capped build succeeds.
+  - Two-player headless run on port 8081: 19/19 checks. Lobby room on both clients, spawns 0/1, each sees the other resting. Same stage with 2 bays; each orb starts explore in its own bay (`startOrder` index) with the gate open, and A sees B in B's bay. An orb fired at a shut gate stops at its face (right edge 174 against the gate at 184). Countdown: gates shut on both, collider live, both held in their bays, and A sees B there. GO: gates open, orb leaves. Finish → `roundEnd`. No page errors.
+  - Solo (no connection; started in-page with the same config as `startGame()`, since no UI path starts solo since slice 2) with a driven clock: one bay, shut through the 3-2-1, the open animation level falls 0.70 → 0.47 → 0.09 → 0 over 4 frames, the orb leaves, and R gives a new seed with one shut bay and the URL rewritten. Normal and reduced motion both pass.
+- **Not verified:** 3–8 players in a browser (bays 3–8 are covered only by the generator tests); low quality visually; how the gate feels on real hardware at speed (headless ran at about 5 fps); host migration, mid-match join and the other slice 2 gaps.
+
+### Return to lobby: Phaser side (contract §5, 2026-10-23)
+- **`race/match.ts`:** `MatchView.returned` is the latest `lobbyReturn.returned`, or null outside the match-over wait. It is cleared on `roomState` lobby and on `roundStart`, and a player who leaves is dropped from it. A `lobbyReturn` that arrives after the phase is already lobby is ignored. `lobbyReturn` joins `MATCH_EVENTS` (the tracker now has 7 subscriptions). Derived helpers:
+  - `iReturned` (the same rule as `session.ts` `meReturned`: phase lobby, or me in `returned`)
+  - `returnedRemoteIds`
+  - `hiddenRemoteIds`: during the wait, once I have returned, everyone who has not; while I am on the match-end view, everyone who has. Empty outside the wait.
+- **`stageFor`** returns the lobby room once `iReturned`, even while the phase is still match. `MainScene.sync` therefore rebuilds the lobby room and starts free roam at my join-order spawn: no timer or countdown, controls unlocked. The match-end effects (end hold, freeze, celebrate/disintegrate) now run only while the race stage is shown, so they don't replay after the rebuild. The HUD's bottom line shows the lobby once the lobby room is up.
+- **Visibility:** `PlayerManager.setHiddenRemotes` hides a remote orb (unplaced, so it is out of bumps and end effects) and ignores its moves. `MainScene` also drops its relayed actions. A player who stops being hidden reappears at their next move, and revealing anyone forces a re-send of my own position (`resendPosition`, the same mechanism as when someone joins), so each side sees the other even when standing still. When the phase becomes lobby the hidden set empties, every client reveals everyone, and so everyone re-sends.
+- **Choice:** before anyone returns (`returned: []`) nobody is hidden, since everyone is still on the match-end view.
+- **Verified:** vitest (match 25 tests, full suite 249) and `tsc`. **Not run in a browser.** The build and the two-player run are left to integration.
+
+### Return to lobby: integration (2026-10-23)
+- **Built** by all three agents against contract §5. The Kotlin and Phaser agents were interrupted partway through and resumed from their partial edits on disk.
+- **Verified:**
+  - vitest: 249 tests, all passing. `tsc` reports 0 errors. The capped build succeeds.
+  - Kotlin: 59 tests, all passing.
+  - A two-player headless run (first to 1 win) passed 12/12 checks:
+    - B sees the match results with a 30 s countdown.
+    - After A presses Return, A is in the lobby room while the phase is still match, with "Waiting for 1 player…" showing and B hidden. B stays on the match-end view.
+    - After B presses Return, both are in the lobby phase and room and see each other.
+    - Start is enabled again and wins are reset. No page errors.
+- **Not verified in a browser:** auto-return at the 30 s mark (covered by Kotlin tests only), and a leave completing the wait.

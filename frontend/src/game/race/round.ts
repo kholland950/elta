@@ -43,6 +43,13 @@ export const roundPhaseAt = (plan: RoundPlan, nowMs: number): RoundPhase => {
 export const controlsLocked = (phase: RoundPhase): boolean =>
   phase.kind === 'snap' || phase.kind === 'countdown'
 
+/**
+ * Whether the start-bay gates are open. They open when explore begins (each orb starts it in its
+ * own bay), shut while the orbs are held in their bays (the short wait before explore, the snap
+ * and the 3-2-1), and all drop at GO.
+ */
+export const gateOpen = (phase: RoundPhase): boolean => phase.kind === 'explore' || phase.kind === 'race'
+
 const inGate = (gate: FinishGate, p: { x: number; y: number }) =>
   p.x >= gate.x && p.y >= gate.top && p.y <= gate.bottom
 

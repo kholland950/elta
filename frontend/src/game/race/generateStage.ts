@@ -15,10 +15,9 @@ import {
   planStart,
   SEA_ROWS,
   SegmentPlan,
-  START_FLOOR,
-  startSlotsAbove,
+  clampBays,
 } from './segments'
-import type { Bounce, Point, Rect, Segment, Solid, Stage } from './stage'
+import type { Bounce, Point, RaceStage, Rect, Segment, Solid } from './stage'
 import { padApex } from './tuning'
 
 /** Stop adding segments once the summed par reaches this. */
@@ -114,17 +113,19 @@ const toSegment = (plan: SegmentPlan): Segment => {
 }
 
 /**
- * Generates the stage for a seed and difficulty: the start chamber, weighted tunnel segments
+ * Generates the stage for a seed, difficulty and bay count (one start bay per player in the
+ * round, clamped to 1–8; solo uses 1): the bay stack and start chamber, weighted tunnel segments
  * joined mouth to mouth until the summed par reaches TARGET_PAR_MS, then the finish chamber. Rock
  * fills everything else; the air under the tunnels is split by curtains (pillars down to the sea
  * surface) at every segment start. One PRNG stream and integer arithmetic only, so every client
  * builds the identical stage.
  */
-export const generateStage = (rawSeed: number, difficulty: number): Stage => {
+export const generateStage = (rawSeed: number, difficulty: number, bays: number): RaceStage => {
   const seed = rawSeed >>> 0
   const knobs = difficultyKnobs(difficulty)
   const rng = createRng(seed)
-  const plans: Array<SegmentPlan> = [planStart()]
+  const start = planStart(clampBays(bays))
+  const plans: Array<SegmentPlan> = [start.plan]
   let parMs = plans[0].parMs
   while (parMs < TARGET_PAR_MS) {
     const plan = nextPlan(rng, knobs, plans[plans.length - 1].exit)
@@ -165,6 +166,7 @@ export const generateStage = (rawSeed: number, difficulty: number): Stage => {
   const finishPlan = finish.chambers[0]
 
   return {
+    kind: 'race',
     seed,
     difficulty: knobs.difficulty,
     cell: CELL,
@@ -176,17 +178,17 @@ export const generateStage = (rawSeed: number, difficulty: number): Stage => {
     edges,
     grid,
     spine,
-    startSlots: startSlotsAbove(START_FLOOR),
+    startSlots: start.bays.map((b) => b.spawn),
+    bays: start.bays.map((b) => ({ spawn: b.spawn, gate: b.gate })),
     finish: { x: finishCol * CELL, top: finishPlan.r0 * CELL, bottom: finishPlan.r1 * CELL },
     parMs,
   }
 }
 
-/** Start cell and finish cells of a stage's grid, for the reach check. */
-export const reachTargets = (stage: Stage): ReachTargets => {
+/** Start cells (one per bay) and finish cells of a stage's grid, for the reach check. */
+export const reachTargets = (stage: RaceStage): ReachTargets => {
   const g: CellGrid = stage.grid
-  const slot = stage.startSlots[0]
-  const start = cellIndex(g, Math.floor(slot.x / CELL), Math.floor(slot.y / CELL))
+  const starts = stage.startSlots.map((slot) => cellIndex(g, Math.floor(slot.x / CELL), Math.floor(slot.y / CELL)))
   const finish: Array<number> = []
   const c0 = stage.finish.x / CELL
   for (let row = stage.finish.top / CELL; row < stage.finish.bottom / CELL; row++) {
@@ -194,7 +196,7 @@ export const reachTargets = (stage: Stage): ReachTargets => {
       if (g.cells[cellIndex(g, col, row)] === OPEN) finish.push(cellIndex(g, col, row))
     }
   }
-  return { start, finish }
+  return { starts, finish }
 }
 
-export const checkStage = (stage: Stage): StageReach => checkGrid(stage.grid, reachTargets(stage), reachOptions)
+export const checkStage = (stage: RaceStage): StageReach => checkGrid(stage.grid, reachTargets(stage), reachOptions)

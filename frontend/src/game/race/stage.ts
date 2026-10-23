@@ -65,7 +65,7 @@ export interface Edge {
   pad: boolean
 }
 
-export type SegmentType = 'start' | 'run' | 'shaftUp' | 'shaftDown' | 'stallChamber' | 'finish'
+export type SegmentType = 'start' | 'run' | 'shaftUp' | 'shaftDown' | 'stallChamber' | 'finish' | 'lobby'
 
 export interface Segment {
   type: SegmentType
@@ -96,7 +96,20 @@ export interface FinishGate {
   bottom: number
 }
 
+/**
+ * A start bay: a small compartment in the stack at the start, one per player in the round. The
+ * gate is a barrier across its opening on the right, shut from the snap until GO.
+ */
+export interface Bay {
+  /** Orb centre resting on the bay floor. */
+  spawn: Point
+  /** The gate's barrier, across the bay's opening. */
+  gate: Rect
+}
+
 export interface Stage {
+  /** A generated race stage, or the hand-built lobby room (no finish, no bays). */
+  kind: 'race' | 'lobby'
   seed: number
   difficulty: number
   cell: number
@@ -108,8 +121,17 @@ export interface Stage {
   edges: Array<Edge>
   grid: CellGrid
   spine: Array<Point>
-  /** Orb centre positions for the start, stacked upward in the start chamber. */
+  /**
+   * Orb centre spawn points: one per start bay on a race stage (bay i is slot i), or the lobby's
+   * spawns in join order.
+   */
   startSlots: Array<Point>
-  finish: FinishGate
+  /** Start bays, bottom first; empty in the lobby. */
+  bays: Array<Bay>
+  /** The finish; the lobby has none. */
+  finish?: FinishGate
   parMs: number
 }
+
+/** A generated race stage always has a finish. */
+export type RaceStage = Stage & { kind: 'race'; finish: FinishGate }

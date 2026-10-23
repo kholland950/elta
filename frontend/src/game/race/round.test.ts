@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { controlsLocked, finishCrossing, formatRaceTime, localPlan, roundPhaseAt } from './round'
+import { controlsLocked, finishCrossing, formatRaceTime, gateOpen, localPlan, roundPhaseAt } from './round'
 
 describe('roundPhaseAt', () => {
   const plan = { exploreAt: 1000, snapAt: 16000, goAt: 19500 }
@@ -70,5 +70,43 @@ describe('formatRaceTime', () => {
     expect(formatRaceTime(0)).toBe('0:00.000')
     expect(formatRaceTime(54321.9)).toBe('0:54.321')
     expect(formatRaceTime(61005)).toBe('1:01.005')
+  })
+})
+
+describe('gateOpen', () => {
+  const plan = { exploreAt: 1000, snapAt: 16000, goAt: 19500 }
+  const at = (t: number) => gateOpen(roundPhaseAt(plan, t))
+
+  it('is shut while orbs wait in their bays before explore', () => {
+    expect(at(0)).toBe(false)
+    expect(at(999)).toBe(false)
+  })
+
+  it('is open for all of explore', () => {
+    expect(at(1000)).toBe(true)
+    expect(at(15999)).toBe(true)
+  })
+
+  it('is shut from the snap through the whole countdown', () => {
+    for (const t of [16000, 16400, 16500, 17000, 18500, 19499]) expect(at(t)).toBe(false)
+  })
+
+  it('drops at GO and stays open for the race', () => {
+    expect(at(19500)).toBe(true)
+    expect(at(60000)).toBe(true)
+  })
+
+  it('matches the input lock: shut exactly when controls are locked, once explore has begun', () => {
+    for (let t = 1000; t < 25000; t += 250) {
+      const phase = roundPhaseAt(plan, t)
+      expect(gateOpen(phase)).toBe(!controlsLocked(phase))
+    }
+  })
+
+  it('is shut for a solo countdown and opens at its GO', () => {
+    const solo = localPlan(0)
+    expect(gateOpen(roundPhaseAt(solo, 0))).toBe(false)
+    expect(gateOpen(roundPhaseAt(solo, 2999))).toBe(false)
+    expect(gateOpen(roundPhaseAt(solo, 3000))).toBe(true)
   })
 })

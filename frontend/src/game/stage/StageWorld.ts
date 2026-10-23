@@ -10,16 +10,20 @@ export interface StageContacts {
 
 /**
  * Arcade bodies for a stage: the merged rock solids and bounce pads as static bodies with colliders
- * against the local orb, plus the world bounds, sea level and finish gate. Sea drag itself is
+ * against the local orb, the start-bay gates (a collider that is active only while they are shut),
+ * plus the world bounds, sea level and finish gate. Sea drag itself is
  * applied per step by the player manager from `seaY`, which is cheaper than an overlap zone the
  * width of the stage.
  */
 export class StageWorld {
-  readonly gate: FinishGate
+  readonly gate?: FinishGate
   readonly seaY: number
   private solids: Phaser.Physics.Arcade.StaticGroup
   private pads: Phaser.Physics.Arcade.StaticGroup
+  private gates: Phaser.Physics.Arcade.StaticGroup
   private colliders: Array<Phaser.Physics.Arcade.Collider> = []
+  private gateCollider?: Phaser.Physics.Arcade.Collider
+  private gatesOpen = true
 
   constructor(
     private readonly scene: Phaser.Scene,
@@ -32,8 +36,10 @@ export class StageWorld {
 
     this.solids = scene.physics.add.staticGroup()
     this.pads = scene.physics.add.staticGroup()
+    this.gates = scene.physics.add.staticGroup()
     for (const solid of stage.solids) this.addBlock(this.solids, solid)
     for (const pad of stage.pads) this.addBlock(this.pads, pad)
+    for (const bay of stage.bays) this.addBlock(this.gates, bay.gate)
   }
 
   private addBlock(group: Phaser.Physics.Arcade.StaticGroup, rect: Rect) {
@@ -53,6 +59,16 @@ export class StageWorld {
         contacts.onSurface()
       }),
     )
+    // A shut gate is a wall like any other, recharge included
+    this.gateCollider = physics.add.collider(sprite, this.gates, () => contacts.onSurface())
+    this.gateCollider.active = !this.gatesOpen
+    this.colliders.push(this.gateCollider)
+  }
+
+  /** Opens or shuts every start-bay gate's barrier. */
+  public setGatesOpen(open: boolean) {
+    this.gatesOpen = open
+    if (this.gateCollider) this.gateCollider.active = !open
   }
 
   public destroy() {
@@ -60,5 +76,6 @@ export class StageWorld {
     this.colliders = []
     this.solids.destroy(true)
     this.pads.destroy(true)
+    this.gates.destroy(true)
   }
 }

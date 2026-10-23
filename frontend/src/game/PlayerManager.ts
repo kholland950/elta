@@ -1,15 +1,10 @@
 import type { MainScene } from 'game/MainScene'
-import {
-  MessageEventType,
-  NewPlayerMessage,
-  PlayerDataMessage,
-  PlayerMoveMessage,
-} from 'game/messages'
 import Phaser from 'phaser'
 import type { Physics } from 'phaser'
-import events from 'app/events'
 import type { QualityProfile } from 'game/fx/quality'
 import type { FeelSink } from 'game/fx/feelEvents'
+import type { PlayerMoveMessage, RoomPlayer } from 'game/race/protocol'
+import type { Point } from 'game/race/stage'
 import { PhysicsSprite, PlayerVisuals } from 'game/render/PlayerVisuals'
 import {
   BumpCooldowns,
@@ -22,6 +17,14 @@ import {
   stepPilot,
 } from 'game/race/movement'
 import { BODY, STEP_MS } from 'game/race/tuning'
+
+/** Own position updates sent per second. */
+export const MOVE_TPS = 32
+
+/** Where the local orb's movement goes (the room connection); absent when playing solo. */
+export interface MoveSink {
+  sendMove(m: Omit<PlayerMoveMessage, 'playerId'>): void
+}
 
 const playerConfig = {
   startingPosition: { x: 400, y: 400 },
@@ -36,6 +39,8 @@ export interface Player {
   color: string
   isLocal: boolean
   name: string
+  /** False for a remote orb until its first playerMove says where it is. */
+  placed: boolean
 }
 
 /** Presses seen since the last physics step; each is consumed by exactly one step. */
@@ -68,10 +73,17 @@ export class PlayerManager {
   /** Physics steps run since the scene started; the clock for bump cooldowns. */
   private steps = 0
   private lastSent = { x: 0, y: 0 }
+  /** Remote players in the other world (lobby room vs match-end view); not shown, moves ignored. */
+  private hidden: ReadonlySet<string> = new Set()
   /** Y of the energy sea surface; below it the orb is slowed. */
   private seaY = Infinity
 
-  constructor(scene: MainScene, quality: QualityProfile, feel: FeelSink) {
+  constructor(
+    scene: MainScene,
+    quality: QualityProfile,
+    feel: FeelSink,
+    private readonly moves?: MoveSink,
+  ) {
     this.scene = scene
     this.quality = quality
     this.feel = feel
@@ -104,12 +116,17 @@ export class PlayerManager {
   private addLocalPlayer(player: Player) {
     this.localPlayer = player
     this.scene.cameras.main.startFollow(this.localPlayer.sprite, false, 0.2, 0.2)
-    this.scene.messageBroker.send(MessageEventType.NEW_PLAYER, {
-      id: player.id,
-      color: player.color,
-      name: player.name,
-    } as NewPlayerMessage)
-    this.scene.messageBroker.schedule(MessageEventType.PLAYER_MOVE, this.getPlayerPosition, player)
+    const moves = this.moves
+    if (moves) {
+      this.scene.time.addEvent({
+        delay: 1000 / MOVE_TPS,
+        loop: true,
+        callback: () => {
+          const move = this.movedSinceLastSend()
+          if (move) moves.sendMove(move)
+        },
+      })
+    }
 
     player.sprite.body.setCollideWorldBounds(true, undefined, undefined, true)
     this.scene.physics.world.on(
@@ -133,10 +150,17 @@ export class PlayerManager {
     return this.localPlayer?.id
   }
 
+  /** The server assigns the local id after the scene starts; the orb takes it when it arrives. */
+  public setLocalId(id: string) {
+    if (this.localPlayer) this.localPlayer.id = id
+  }
+
   /** The visuals of the local or a remote player, if that player is currently in the game. */
   public visualsFor(id: string): PlayerVisuals | undefined {
     if (this.localPlayer?.id === id) return this.localPlayer.visuals
-    return this.remotePlayers.find((player) => player.id === id)?.visuals
+    // A remote orb not placed yet has nowhere to show effects
+    const remote = this.remotePlayers.find((player) => player.id === id)
+    return remote?.placed ? remote.visuals : undefined
   }
 
   public setSeaY(seaY: number) {
@@ -200,13 +224,12 @@ export class PlayerManager {
     y: number,
     id = PlayerManager.generatePlayerId(),
   ) {
-    events.send('addPlayer', { name, id })
-
     const player: Player = {} as any
     player.id = id
     player.isLocal = isLocal
     player.name = name
     player.color = color
+    player.placed = isLocal
 
     this.createSprite(player, x, y)
 
@@ -253,60 +276,126 @@ export class PlayerManager {
     body.setCollideWorldBounds(true)
     body.setBounce(BODY.bounce, BODY.bounce)
     body.setMaxSpeed(BODY.maxSpeed)
+    // A remote orb is dead-reckoned from its owner's last update and never collides with the
+    // stage, so gravity would sink it through the floor whenever its owner stops sending (at rest,
+    // or held in a start bay). Without gravity it coasts on the sent velocity, slowed by drag.
+    if (!player.isLocal) body.setAllowGravity(false)
   }
 
-  public updateGameState(players: Array<PlayerDataMessage>) {
-    players?.forEach((player) => {
-      if (!this.remotePlayers.find((p) => p.id === player.id)) {
-        this.addPlayer(player.color, player.name, false, player.x, player.y, player.id)
-      }
+  /**
+   * Makes the remote orbs match the room's players: adds the missing (hidden until their first
+   * move) and removes those who are gone. `announce` shows "joined" for the added ones. When
+   * someone is added the local position goes out again on the next tick: moves are only sent on
+   * change, so a newcomer would otherwise never see an orb that is sitting still.
+   */
+  public syncRemotes(players: ReadonlyArray<RoomPlayer>, announce: boolean) {
+    const ids = new Set(players.map((p) => p.id))
+    this.remotePlayers
+      .filter((player) => !ids.has(player.id))
+      .forEach((player) => this.playerLeft(player.id))
+    players.forEach((p) => {
+      if (this.remotePlayers.some((player) => player.id === p.id)) return
+      this.addPlayer(p.color, p.name, false, 0, 0, p.id)
+      const added = this.remotePlayers[this.remotePlayers.length - 1]
+      this.setPlaced(added, false)
+      this.resendPosition()
+      if (announce) this.scene.events.emit('message', `${p.name} joined`)
     })
   }
 
-  private getPlayerPosition = (player: Player): PlayerMoveMessage | undefined => {
-    let playerPostion: PlayerMoveMessage | undefined = undefined
-    const { x, y } = player.sprite
-    if (Math.abs(this.lastSent.x - x) > 1 || Math.abs(this.lastSent.y - y) > 1) {
-      playerPostion = {
-        playerId: player.id,
-        x,
-        y,
-        velocityX: player.sprite.body.velocity.x,
-        velocityY: player.sprite.body.velocity.y,
-      }
-    }
-    this.lastSent = { x, y }
-    return playerPostion
+  /** Sends the local position on the next tick even if it has not changed. */
+  public resendPosition() {
+    this.lastSent = { x: NaN, y: NaN }
   }
 
-  public playerJoined(color: string, name: string, x: number, y: number, id: string) {
-    this.addPlayer(color, name, false, x, y, id)
-    this.scene.events.emit('message', `${name} joined`)
+  /**
+   * Remote players to hide: their orbs disappear (and leave bumps) and their moves are ignored.
+   * One who stops being hidden reappears at their next move, and the local position goes out
+   * again so they see this orb too.
+   */
+  public setHiddenRemotes(ids: ReadonlySet<string>) {
+    let revealed = false
+    for (const player of this.remotePlayers) {
+      const was = this.hidden.has(player.id)
+      const now = ids.has(player.id)
+      if (now && !was) this.setPlaced(player, false)
+      if (was && !now) revealed = true
+    }
+    this.hidden = new Set(ids)
+    if (revealed) this.resendPosition()
+  }
+
+  public isHidden(id: string): boolean {
+    return this.hidden.has(id)
+  }
+
+  /** Hides a remote orb (and takes it out of bumps) until it is placed, or shows it once placed. */
+  private setPlaced(player: Player, placed: boolean) {
+    player.placed = placed
+    player.sprite.body.enable = placed
+    player.visuals.setPresence(placed ? 1 : 0)
+  }
+
+  /** The local position and velocity, when the orb has moved more than a pixel since last sent. */
+  private movedSinceLastSend(): Omit<PlayerMoveMessage, 'playerId'> | undefined {
+    const sprite = this.localPlayer?.sprite
+    if (!sprite) return undefined
+    const { x, y } = sprite
+    // NaN (a resend was asked for) compares false, so it counts as moved
+    const moved = !(Math.abs(this.lastSent.x - x) <= 1 && Math.abs(this.lastSent.y - y) <= 1)
+    this.lastSent = { x, y }
+    if (!moved) return undefined
+    return { x, y, velocityX: sprite.body.velocity.x, velocityY: sprite.body.velocity.y }
   }
 
   public playerMoved(id: string, x: number, y: number, velocityX: number, velocityY: number) {
-    const playerUpdated = this.remotePlayers.find((player) => player.id === id)
-    if (playerUpdated) {
-      playerUpdated.sprite.x = x
-      playerUpdated.sprite.y = y
-      playerUpdated.sprite.body.setVelocityX(velocityX)
-      playerUpdated.sprite.body.setVelocityY(velocityY)
+    const player = this.remotePlayers.find((p) => p.id === id)
+    if (!player || this.hidden.has(id)) return
+    if (!player.placed) {
+      // First known position: appear there rather than sliding in from wherever the body was
+      player.sprite.setPosition(x, y)
+      this.setPlaced(player, true)
+      player.sprite.body.reset(x, y)
     }
+    player.sprite.x = x
+    player.sprite.y = y
+    player.sprite.body.setVelocity(velocityX, velocityY)
+  }
+
+  /** Puts a remote orb at a point (its start slot at the snap) until its own updates arrive. */
+  public placeRemote(id: string, point: Point) {
+    const player = this.remotePlayers.find((p) => p.id === id)
+    if (!player || !player.placed) return
+    player.sprite.setPosition(point.x, point.y)
+    player.sprite.body.reset(point.x, point.y)
+  }
+
+  /**
+   * Stops remote orbs integrating their last velocity (after the round ended, when their owners
+   * are frozen too), or lets them move again.
+   */
+  public freezeRemotes(frozen: boolean) {
+    this.remotePlayers.forEach((player) => {
+      player.sprite.body.moves = !frozen
+      if (frozen) player.sprite.body.stop()
+    })
+  }
+
+  /** The local and every placed remote player, for end-of-round effects. */
+  public allPresent(): Array<Player> {
+    const all = this.remotePlayers.filter((player) => player.placed)
+    if (this.localPlayer) all.unshift(this.localPlayer)
+    return all
   }
 
   public playerLeft(id: string) {
-    events.send('removePlayer', id)
-
     const playerToRemove = this.remotePlayers.find((player) => player.id === id)
-    playerToRemove?.sprite.destroy()
-    playerToRemove?.visuals.destroy()
+    if (!playerToRemove) return
+    playerToRemove.sprite.destroy()
+    playerToRemove.visuals.destroy()
     this.bumps.forget(id)
-
-    const index = this.remotePlayers.indexOf(playerToRemove as Player, 0)
-    if (index > -1) {
-      this.remotePlayers.splice(index, 1)
-      this.scene.events.emit('message', `${playerToRemove?.name} left`)
-    }
+    this.remotePlayers.splice(this.remotePlayers.indexOf(playerToRemove), 1)
+    this.scene.events.emit('message', `${playerToRemove.name} left`)
   }
 
   /**
