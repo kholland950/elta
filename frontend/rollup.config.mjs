@@ -12,6 +12,19 @@ import proxy from './proxy.js'
 
 const production = !process.env.ROLLUP_WATCH
 
+// Identifies this bundle so the server can reject clients from a stale deploy (joinRoom `build`).
+// Dev/watch builds use a fixed value so reloads never trip staleBuild.
+const buildId = production ? Date.now().toString(36) : 'dev'
+
+// Replaces the __BUILD_ID__ identifier in our own TS sources with a string literal
+const buildIdPlugin = () => ({
+    name: 'build-id',
+    transform(code, id) {
+        if (id.includes('node_modules') || !/\.ts$/.test(id) || !code.includes('__BUILD_ID__')) return null
+        return { code: code.replace(/\b__BUILD_ID__\b/g, JSON.stringify(buildId)), map: null }
+    },
+})
+
 export default {
     //  Our games entry point (edit as required)
     input: [
@@ -32,6 +45,8 @@ export default {
     },
 
     plugins: [
+        buildIdPlugin(),
+
         svelte({
             compilerOptions: {
                 // enable run-time checks when not in production

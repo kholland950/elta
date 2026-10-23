@@ -16,13 +16,27 @@ import org.slf4j.event.*
 import io.ktor.server.websocket.*
 import io.ktor.websocket.*
 import kotlinx.serialization.Serializable
+import com.kholland.race.RoomEnv
+import com.kholland.ws.RoomRegistry
+import com.kholland.ws.gameSocket
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlin.time.Duration.Companion.seconds
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
 @Suppress("unused") // Referenced in application.conf
 @kotlin.jvm.JvmOverloads
-fun Application.module(testing: Boolean = false) {
+fun Application.module(testing: Boolean = false) = appModule(RoomEnv())
+
+/** Composition root. Tests call this directly to inject short [RoomEnv] timings and a seeded Random. */
+fun Application.appModule(env: RoomEnv, clock: () -> Long = System::currentTimeMillis) {
+    val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    monitor.subscribe(ApplicationStopped) { scope.cancel() }
+    val registry = RoomRegistry(scope, clock, env)
+
     install(Mustache) {
         mustacheFactory = DefaultMustacheFactory("templates/mustache")
     }
@@ -87,19 +101,7 @@ fun Application.module(testing: Boolean = false) {
             call.respondText("Counter is ${session.count}. Refresh to increment.")
         }
 
-        webSocket("/ws/game") {
-            MessageBroker.add(this)
-
-            try {
-                for (frame in incoming) {
-                    if (frame is Frame.Text) {
-                        MessageBroker.receive(frame.readText(), this)
-                    }
-                }
-            } finally {
-                MessageBroker.remove(this)
-            }
-        }
+        gameSocket(registry, clock)
     }
 }
 
