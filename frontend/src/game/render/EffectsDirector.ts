@@ -125,7 +125,6 @@ export class EffectsDirector implements FeelSink {
         break
       case 'dash':
         this.pop()
-        this.cameraFX.kick(this.scene, e.dir)
         this.local?.ignite()
         this.afterimages()
         this.wisps(e.dir)
