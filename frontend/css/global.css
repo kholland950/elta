@@ -1,57 +1,145 @@
 @import 'milligram/dist/milligram.css';
 
+/* Neon palette matching the in-game look (teal world border, magenta nebula, near-black space) */
 :root {
-  --primary: #62929e;
-  --secondary: #f24236;
-  --bg: #393d3f;
-  --text: #fffafb;
-  --darkText: #050505;
+  --primary: #2ee6d6;
+  --secondary: #ff3d9a;
+  --bg: #080b18;
+  --text: #f4f7ff;
+  --darkText: #050810;
+  --glass: rgba(10, 14, 32, 0.68);
+  --glow: 0 0 12px rgba(46, 230, 214, 0.45);
 }
 
 body {
-  font-family: 'Comfortaa', 'sans-serif';
+  font-family: 'Comfortaa', sans-serif;
 
   background-color: var(--bg);
   color: var(--text);
 
-  background-image: url('/static/assets/spacebg.jpg');
+  background-image:
+    radial-gradient(ellipse at 20% 15%, rgba(255, 61, 154, 0.14), transparent 55%),
+    radial-gradient(ellipse at 80% 85%, rgba(46, 230, 214, 0.14), transparent 55%),
+    linear-gradient(rgba(5, 8, 16, 0.55), rgba(5, 8, 16, 0.55)), url('/static/assets/spacebg.jpg');
 
-  height: 100vw;
+  height: 100vh;
   width: 100vw;
   overflow: hidden;
+}
+
+h1.title {
+  font-family: 'Orbitron', 'Comfortaa', sans-serif;
+  font-weight: 700;
+  letter-spacing: 0.3em;
+  text-indent: 0.3em;
+  color: var(--text);
+  text-shadow:
+    0 0 8px var(--primary),
+    0 0 28px var(--primary);
+}
+
+label {
+  color: var(--text);
 }
 
 .button {
   background-color: var(--primary);
   border-color: var(--primary);
+  color: var(--darkText);
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(46, 230, 214, 0.35);
+  transition:
+    box-shadow 0.15s,
+    background-color 0.15s,
+    color 0.15s;
+
+  &:hover {
+    background-color: #7ff5ea;
+    border-color: #7ff5ea;
+    color: var(--darkText);
+    box-shadow: 0 0 20px rgba(46, 230, 214, 0.8);
+  }
+
+  &:focus-visible {
+    background-color: #7ff5ea;
+    border-color: #fff;
+    color: var(--darkText);
+    outline: 3px solid var(--text);
+    outline-offset: 3px;
+    box-shadow: 0 0 20px rgba(46, 230, 214, 0.8);
+  }
+
+  &:focus:not(:focus-visible) {
+    background-color: var(--primary);
+    border-color: var(--primary);
+    color: var(--darkText);
+  }
+
+  &.button-outline {
+    background-color: transparent;
+    color: var(--primary);
+    box-shadow: none;
+
+    &:hover,
+    &:focus-visible {
+      background-color: rgba(46, 230, 214, 0.16);
+      border-color: #7ff5ea;
+      color: #7ff5ea;
+      box-shadow: 0 0 14px rgba(46, 230, 214, 0.5);
+    }
+
+    &:focus:not(:focus-visible) {
+      background-color: transparent;
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+  }
 }
 
-input[type] {
+input[type],
+select {
   color: var(--text);
+  background-color: rgba(5, 8, 16, 0.6);
+  border-color: rgba(46, 230, 214, 0.45);
+  transition:
+    box-shadow 0.15s,
+    border-color 0.15s;
+
+  &::placeholder {
+    color: #9aa6c4;
+  }
+
+  &:hover {
+    border-color: var(--primary);
+  }
 
   &:focus {
     border-color: var(--primary);
+    outline: 2px solid var(--primary);
+    outline-offset: 1px;
+    box-shadow: var(--glow);
   }
 }
 
 select {
-  color: var(--text);
-
   & option {
     background-color: var(--bg);
   }
 
   &:focus {
-    border-color: var(--primary);
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 8" width="30"><path fill="%2362929e" d="M0,0l6,8l6-8"/></svg>');
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 30 8" width="30"><path fill="%232ee6d6" d="M0,0l6,8l6-8"/></svg>');
   }
 }
 
 .card {
-  background-color: var(--bg);
+  background-color: var(--glass);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(46, 230, 214, 0.35);
   padding: 2rem;
-  border-radius: 8px;
-  box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+  border-radius: 12px;
+  box-shadow:
+    0 0 24px rgba(46, 230, 214, 0.18),
+    0 8px 32px rgba(0, 0, 0, 0.6);
 }
 
 main {
@@ -76,6 +164,23 @@ main.menu {
 }
 
 .scoreboard {
-  background-color: #393d3fbb;
+  background-color: rgba(10, 14, 32, 0.78);
   min-width: 450px;
+
+  & h1 {
+    color: var(--primary);
+    text-shadow: 0 0 14px rgba(46, 230, 214, 0.6);
+  }
+
+  & li {
+    color: var(--text);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .button,
+  input[type],
+  select {
+    transition: none;
+  }
 }

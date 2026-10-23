@@ -1,6 +1,9 @@
 import Phaser from 'phaser'
 import events from 'app/events'
 
+// Refresh the ?perf readout a few times a second so the number is readable
+const PERF_INTERVAL_MS = 250
+
 type MessageObject = {
   id: string
   message: string
@@ -8,6 +11,9 @@ type MessageObject = {
 
 export class HUDScene extends Phaser.Scene {
   private messages: Array<MessageObject> = []
+  private perfText?: Phaser.GameObjects.Text
+  private perfElapsed = 0
+  private worstFrame = 0
 
   constructor() {
     super({
@@ -29,6 +35,27 @@ export class HUDScene extends Phaser.Scene {
     gameScene.events.on('closeScoreboard', () => {
       events.send('showScoreboard', false)
     })
+
+    if (new URLSearchParams(window.location.search).has('perf')) {
+      const perfText = this.add
+        .text(this.scale.width - 10, 10, '', { font: '16px monospace', color: '#00ff88' })
+        .setOrigin(1, 0)
+        .setDepth(1000)
+      this.scale.on('resize', (size: Phaser.Structs.Size) => perfText.setX(size.width - 10))
+      this.perfText = perfText
+    }
+  }
+
+  public update(_time: number, delta: number) {
+    if (!this.perfText) return
+    this.worstFrame = Math.max(this.worstFrame, delta)
+    this.perfElapsed += delta
+    if (this.perfElapsed < PERF_INTERVAL_MS) return
+
+    const fps = this.game.loop.actualFps
+    this.perfText.setText(`${fps.toFixed(0)} fps\nworst ${this.worstFrame.toFixed(1)} ms`)
+    this.perfElapsed = 0
+    this.worstFrame = 0
   }
 
   private addMessage(message: string, timeout: number = 5000) {

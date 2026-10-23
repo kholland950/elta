@@ -8,34 +8,15 @@ import {
 import Phaser from 'phaser'
 import type { Physics } from 'phaser'
 import events from 'app/events'
-
-const collisionEmitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
-  frame: ['red', 'yellow', 'green'],
-  lifespan: 2000,
-  speed: { min: 600, max: 1000 },
-  scale: { start: 0.8, end: 0 },
-  gravityY: 1000,
-  blendMode: 'ADD',
-  emitting: false,
-}
-
-const emitterConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
-  lifespan: 1000,
-  // gravityY: 2000,
-  blendMode: 'SCREEN',
-  scale: { start: 0.1, end: 0 },
-  alpha: { start: 1, end: 0 },
-  emitting: false,
-}
+import type { QualityProfile } from 'game/fx/quality'
+import { FeelSink, restoresCharge } from 'game/fx/feelEvents'
+import { PhysicsSprite, PlayerVisuals } from 'game/render/PlayerVisuals'
 
 const playerConfig = {
   startingPosition: { x: 400, y: 400 },
   scale: 0.1,
   hitboxOffset: 125,
   hitboxRadius: 70,
-  textStyle: {
-    fontFamily: 'sans-serif',
-  },
   physics: {
     friction: 800,
     drag: 200,
@@ -49,13 +30,12 @@ const playerConfig = {
 }
 
 export interface Player {
-  sprite: Phaser.GameObjects.Sprite & { body: Phaser.Physics.Arcade.Body }
-  text: Phaser.GameObjects.Text
+  sprite: PhysicsSprite
+  visuals: PlayerVisuals
   id: string
   color: string
   isLocal: boolean
   name: string
-  particles: Phaser.GameObjects.Particles.ParticleEmitter
 }
 
 let lastX: number = 0
@@ -65,6 +45,8 @@ export class PlayerManager {
   private remotePlayers: Array<Player> = []
   private localPlayer: Player
   private scene: MainScene
+  private quality: QualityProfile
+  private feel: FeelSink
   private controls: {
     left: Array<Phaser.Input.Keyboard.Key>
     right: Array<Phaser.Input.Keyboard.Key>
@@ -74,13 +56,14 @@ export class PlayerManager {
     scoreboard: Phaser.Input.Keyboard.Key
   }
   private state: {
-    canStall: Boolean
+    canStall: boolean
     dashes: number
   }
-  private playerExplosion: Phaser.GameObjects.Particles.ParticleEmitter
 
-  constructor(scene: MainScene) {
+  constructor(scene: MainScene, quality: QualityProfile, feel: FeelSink) {
     this.scene = scene as any
+    this.quality = quality
+    this.feel = feel
     this.state = {
       canStall: false,
       dashes: 2,
@@ -121,13 +104,32 @@ export class PlayerManager {
       'worldbounds',
       (body: Physics.Arcade.Body, up: Boolean, down: Boolean, left: Boolean, right: Boolean) => {
         if (body == player.sprite.body && (left || right || down)) {
-          this.state.canStall = true
-          this.state.dashes = playerConfig.physics.dashesAllowed
+          this.recharge()
         }
       },
     )
+  }
 
-    this.playerExplosion = this.scene.add.particles(0, 0, 'flares', collisionEmitterConfig)
+  public get localVisuals(): PlayerVisuals | undefined {
+    return this.localPlayer?.visuals
+  }
+
+  /** Restores stall and dashes; feedback only fires when something was actually used up. */
+  private recharge() {
+    const restored = restoresCharge(this.state, playerConfig.physics.dashesAllowed)
+    this.state.canStall = true
+    this.state.dashes = playerConfig.physics.dashesAllowed
+    if (restored) this.emitLocal('recharge')
+  }
+
+  private emitLocal(kind: 'flap' | 'stall' | 'recharge') {
+    const { x, y } = this.localPlayer.sprite
+    this.feel.emit({ kind, x, y })
+  }
+
+  private emitDash(dir: 1 | -1) {
+    const { x, y } = this.localPlayer.sprite
+    this.feel.emit({ kind: 'dash', x, y, dir })
   }
 
   private addRemotePlayer(player: Player) {
@@ -150,17 +152,18 @@ export class PlayerManager {
     player.name = name
     player.color = color
 
-    this.createParticles(player)
-
     this.createSprite(player, x, y)
 
     this.addPhysics(player)
 
-    player.text = this.scene.add.text(
-      player.sprite.x - 50,
-      player.sprite.y - 50,
+    player.visuals = new PlayerVisuals(
+      this.scene,
+      player.sprite,
+      color,
       name,
-      playerConfig.textStyle,
+      isLocal,
+      playerConfig.physics.maxSpeed,
+      this.quality,
     )
 
     if (isLocal) {
@@ -168,10 +171,6 @@ export class PlayerManager {
     } else {
       this.addRemotePlayer(player)
     }
-  }
-
-  private createParticles(player: Player) {
-    player.particles = this.scene.add.particles(0, 0, player.color, emitterConfig)
   }
 
   private createSprite(player: Player, x: number, y: number) {
@@ -182,6 +181,8 @@ export class PlayerManager {
     ) as any
 
     player.sprite.setScale(playerConfig.scale)
+    // The sprite is only the physics body and camera target; PlayerVisuals draws the player
+    player.sprite.setVisible(false)
   }
 
   private addPhysics(player: Player) {
@@ -243,7 +244,7 @@ export class PlayerManager {
 
     const playerToRemove = this.remotePlayers.find((player) => player.id === id)
     playerToRemove?.sprite.destroy()
-    playerToRemove?.text.destroy()
+    playerToRemove?.visuals.destroy()
 
     const index = this.remotePlayers.indexOf(playerToRemove as Player, 0)
     if (index > -1) {
@@ -260,10 +261,8 @@ export class PlayerManager {
         const body1 = p1 as Phaser.Types.Physics.Arcade.GameObjectWithBody
         const body2 = p2 as Phaser.Types.Physics.Arcade.GameObjectWithBody
         if (body1.body === this.localPlayer.sprite.body || body2.body === this.localPlayer.sprite.body) {
-          this.state.canStall = true
-          this.state.dashes = playerConfig.physics.dashesAllowed
-
-          this.playerExplosion.explode(20, body1.body.center.x, body1.body.center.y)
+          this.feel.emit({ kind: 'collision', x: body1.body.center.x, y: body1.body.center.y })
+          this.recharge()
 
           if (body1.body.x > body2.body.x) {
             body1.body.velocity.add({ x: 500, y: 800})
@@ -276,12 +275,10 @@ export class PlayerManager {
       },
     )
 
-    this.updatePlayer(this.localPlayer)
-    this.remotePlayers.forEach((player) => this.updatePlayer(player))
-
     //controls
     if (this.jump()) {
       this.localPlayer.sprite.body.setVelocityY(-playerConfig.physics.jumpVelocity)
+      this.emitLocal('flap')
     } else {
       this.localPlayer.sprite.body.setAccelerationY(0)
     }
@@ -297,16 +294,19 @@ export class PlayerManager {
       if (this.dash()) {
         this.localPlayer.sprite.body.setVelocityX(playerConfig.physics.dashSpeed)
         this.state.dashes -= 1
+        this.emitDash(1)
       }
     } else if (this.left()) {
       this.localPlayer.sprite.body.setAccelerationX(-playerConfig.physics.acceleration)
       if (this.dash()) {
         this.localPlayer.sprite.body.setVelocityX(-playerConfig.physics.dashSpeed)
         this.state.dashes -= 1
+        this.emitDash(-1)
       }
     } else if (this.stall()) {
       this.localPlayer.sprite.body.setVelocity(0, 0)
       this.state.canStall = false
+      this.emitLocal('stall')
     } else {
       this.localPlayer.sprite.body.setAccelerationX(0)
     }
@@ -340,14 +340,16 @@ export class PlayerManager {
     return Phaser.Input.Keyboard.JustUp(this.controls.scoreboard)
   }
 
-  private updatePlayer(player: Player) {
-    player.text.setPosition(player.sprite.x - 25, player.sprite.y - 100)
-    if (
-      Math.abs(player.sprite.body.velocity.x) > 10 ||
-      Math.abs(player.sprite.body.velocity.y) > 10
-    ) {
-      player.particles.emitParticleAt(player.sprite.x, player.sprite.y, 1)
-    }
+  /** Runs on the scene's post-update, after the physics step has moved the sprites. */
+  public updateVisuals() {
+    this.localPlayer?.visuals.update()
+    this.remotePlayers.forEach((player) => player.visuals.update())
+  }
+
+  public applyQuality(quality: QualityProfile) {
+    this.quality = quality
+    this.localPlayer?.visuals.applyQuality(quality)
+    this.remotePlayers.forEach((player) => player.visuals.applyQuality(quality))
   }
 
   private static generatePlayerId(): string {
