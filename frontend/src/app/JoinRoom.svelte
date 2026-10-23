@@ -36,7 +36,7 @@
       <input type="text" placeholder="Name" id="name" bind:value={name} autocomplete="off" />
       <label for="color">Choose your color</label>
       <select id="color" bind:value={color}>
-        <option />
+        <option></option>
         <option value="Blue">Blue</option>
         <option value="Green">Green</option>
         <option value="Orange">Orange</option>

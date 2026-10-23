@@ -5,6 +5,7 @@ import {
   PlayerDataMessage,
   PlayerMoveMessage,
 } from 'game/messages'
+import Phaser from 'phaser'
 import type { Physics } from 'phaser'
 import events from 'app/events'
 
@@ -84,22 +85,24 @@ export class PlayerManager {
       canStall: false,
       dashes: 2,
     }
+    // Keyboard input is enabled by default in the game config
+    const keyboard = this.scene.input.keyboard!
     this.controls = {
       left: [
-        this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-        this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
       ],
       right: [
-        this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-        this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
       ],
       jump: [
-        this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
-        this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SPACE),
+        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.UP),
       ],
-      dash: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
-      stall: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
-      scoreboard: this.scene.input.keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
+      dash: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.SHIFT),
+      stall: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.CTRL),
+      scoreboard: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
     }
   }
 

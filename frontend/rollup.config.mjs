@@ -1,12 +1,14 @@
-import commonjs from '@rollup/plugin-commonjs'
 import resolve from '@rollup/plugin-node-resolve'
 import typescript from '@rollup/plugin-typescript'
 import svelte from 'rollup-plugin-svelte'
 import postcss from 'rollup-plugin-postcss'
+import postcssImport from 'postcss-import'
+import postcssNested from 'postcss-nested'
+import postcssPresetEnv from 'postcss-preset-env'
+import autoprefixer from 'autoprefixer'
 import livereload from 'rollup-plugin-livereload'
 import copy from 'rollup-plugin-copy'
-
-const proxy = require('./proxy')
+import proxy from './proxy.js'
 
 const production = !process.env.ROLLUP_WATCH
 
@@ -21,7 +23,12 @@ export default {
         name: 'Game',
         format: 'iife',
         sourcemap: true,
-        intro: 'var global = window;'
+    },
+
+    onwarn(warning, warn) {
+        // Svelte's runtime has internal circular imports that are harmless
+        if (warning.code === 'CIRCULAR_DEPENDENCY' && warning.ids?.every((id) => id.includes('node_modules'))) return
+        warn(warning)
     },
 
     plugins: [
@@ -29,12 +36,19 @@ export default {
             compilerOptions: {
                 // enable run-time checks when not in production
                 dev: !production,
-                hydratable: true,
             },
         }),
 
         postcss({
-            extract: 'bundle.css'
+            extract: 'bundle.css',
+            // The postcss plugins are ESM-only, so they're configured here rather than in postcss.config.js
+            config: false,
+            plugins: [
+                postcssImport(),
+                postcssNested(),
+                postcssPresetEnv(),
+                autoprefixer(),
+            ],
         }),
 
         //  Parse our .ts source files
@@ -42,19 +56,7 @@ export default {
             browser: true,
             extensions: ['.ts'],
             dedupe: ['svelte'],
-        }),
-
-        //  We need to convert the Phaser 3 CJS modules into a format Rollup can use:
-        commonjs({
-            include: [
-                'node_modules/eventemitter3/**',
-                'node_modules/phaser/**'
-            ],
-            exclude: [
-                'node_modules/phaser/src/polyfills/requestAnimationFrame.js'
-            ],
-            sourceMap: true,
-            ignoreGlobal: true
+            exportConditions: ['svelte'],
         }),
 
         copy({
@@ -71,7 +73,7 @@ export default {
         // browser on changes when not in production
         !production && livereload('dist'),
 
-        //  See https://www.npmjs.com/package/rollup-plugin-typescript2 for config options
+        //  See https://github.com/rollup/plugins/tree/master/packages/typescript for config options
         typescript(),
     ],
 };

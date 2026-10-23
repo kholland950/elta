@@ -1,21 +1,22 @@
 package com.kholland
 
-import io.ktor.application.*
-import io.ktor.response.*
-import io.ktor.request.*
-import io.ktor.routing.*
+import io.ktor.server.application.*
+import io.ktor.server.response.*
+import io.ktor.server.request.*
+import io.ktor.server.routing.*
 import com.github.mustachejava.DefaultMustacheFactory
-import io.ktor.mustache.Mustache
-import io.ktor.mustache.MustacheContent
-import io.ktor.http.content.*
-import io.ktor.locations.*
-import io.ktor.sessions.*
-import io.ktor.features.*
+import io.ktor.server.mustache.Mustache
+import io.ktor.server.mustache.MustacheContent
+import io.ktor.server.http.content.*
+import io.ktor.server.sessions.*
+import io.ktor.server.plugins.calllogging.*
+import io.ktor.server.plugins.compression.*
+import io.ktor.server.plugins.defaultheaders.*
 import org.slf4j.event.*
+import io.ktor.server.websocket.*
 import io.ktor.websocket.*
-import io.ktor.http.cio.websocket.*
-import kotlinx.coroutines.channels.ClosedReceiveChannelException
-import java.time.*
+import kotlinx.serialization.Serializable
+import kotlin.time.Duration.Companion.seconds
 
 fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 
@@ -24,9 +25,6 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 fun Application.module(testing: Boolean = false) {
     install(Mustache) {
         mustacheFactory = DefaultMustacheFactory("templates/mustache")
-    }
-
-    install(Locations) {
     }
 
     install(Sessions) {
@@ -58,7 +56,7 @@ fun Application.module(testing: Boolean = false) {
     //     includeSubDomains = true
     // }
 
-    // https://ktor.io/servers/features/https-redirect.html#testing
+    // https://ktor.io/docs/server-https-redirect.html
     // if (!testing) {
     //     install(HttpsRedirect) {
     //         // The port to redirect to. By default 443, the default HTTPS port.
@@ -68,9 +66,9 @@ fun Application.module(testing: Boolean = false) {
     //     }
     // }
 
-    install(io.ktor.websocket.WebSockets) {
-        pingPeriod = Duration.ofSeconds(15)
-        timeout = Duration.ofSeconds(15)
+    install(WebSockets) {
+        pingPeriod = 15.seconds
+        timeout = 15.seconds
         maxFrameSize = Long.MAX_VALUE
         masking = false
     }
@@ -80,10 +78,8 @@ fun Application.module(testing: Boolean = false) {
             call.respond(MustacheContent("index.hbs", mapOf("user" to MustacheUser(1, "user man"))))
         }
 
-        // Static feature. Try to access `/static/ktor_logo.svg`
-        static("/static") {
-            resources("static")
-        }
+        // Static plugin. Try to access `/static/ktor_logo.svg`
+        staticResources("/static", "static")
 
         get("/session/increment") {
             val session = call.sessions.get<MySession>() ?: MySession()
@@ -95,13 +91,12 @@ fun Application.module(testing: Boolean = false) {
             MessageBroker.add(this)
 
             try {
-                while (true) {
-                    val frame = incoming.receive()
+                for (frame in incoming) {
                     if (frame is Frame.Text) {
                         MessageBroker.receive(frame.readText(), this)
                     }
                 }
-            } catch (e: ClosedReceiveChannelException) {
+            } finally {
                 MessageBroker.remove(this)
             }
         }
@@ -110,4 +105,5 @@ fun Application.module(testing: Boolean = false) {
 
 data class MustacheUser(val id: Int, val name: String)
 
+@Serializable
 data class MySession(val count: Int = 0)

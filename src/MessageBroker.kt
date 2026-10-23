@@ -1,6 +1,6 @@
 package com.kholland
 
-import io.ktor.http.cio.websocket.*
+import io.ktor.websocket.*
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.Transient
 import kotlinx.serialization.decodeFromString

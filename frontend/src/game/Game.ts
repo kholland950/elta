@@ -1,3 +1,4 @@
+import Phaser from 'phaser'
 import { HUDScene } from './HUDScene'
 import { MainScene } from './MainScene'
 
@@ -8,7 +9,6 @@ const gameConfig: Phaser.Types.Core.GameConfig = {
 
   scale: {
     mode: Phaser.Scale.RESIZE,
-    resolution: window.devicePixelRatio || 1,
   },
 
   physics: {

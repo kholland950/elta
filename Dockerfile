@@ -1,4 +1,4 @@
-FROM gradle:8.3-jdk20 as builder
+FROM gradle:9.8.2-jdk25 AS builder
 
 # Set the working directory to /app
 WORKDIR /app
@@ -8,7 +8,7 @@ COPY . /app
 
 RUN gradle build
 
-FROM openjdk:20-jdk-buster
+FROM eclipse-temurin:25-jre
 
 COPY --from=builder /app/build/libs/app.jar /app/
 

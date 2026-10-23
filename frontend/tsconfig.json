@@ -1,22 +1,23 @@
 {
   "extends": "@tsconfig/svelte/tsconfig.json",
   "compilerOptions": {
-    "lib": ["DOM", "ES2018"],
-    "target": "es5",
-    "moduleResolution": "node",
+    "lib": ["DOM", "ES2020"],
+    "target": "es2020",
+    "moduleResolution": "bundler",
+    "verbatimModuleSyntax": false,
     "noImplicitAny": true,
     "alwaysStrict": true,
     "experimentalDecorators": true,
-    "module": "es2015",
+    "module": "esnext",
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "noEmitOnError": false,
     "jsx": "react",
     "strict": true,
-    "baseUrl": "src",
-    "rootDirs": [
-      "src"
-    ],
+    "paths": {
+      "app/*": ["./src/app/*"],
+      "game/*": ["./src/game/*"]
+    },
     "noUnusedLocals": true,
     "strictPropertyInitialization": false,
     "noEmit": true,

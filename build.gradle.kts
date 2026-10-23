@@ -1,52 +1,58 @@
-import com.github.jengelman.gradle.plugins.shadow.tasks.ShadowJar
 import com.github.gradle.node.npm.task.NpmTask
 
-val logbackVersion: String by project
-val ktorVersion: String by project
-val kotlinVersion: String by project
+val logbackVersion = providers.gradleProperty("logbackVersion").get()
+val ktorVersion = providers.gradleProperty("ktorVersion").get()
+val serializationVersion = providers.gradleProperty("serializationVersion").get()
 
 repositories {
-    mavenLocal()
     mavenCentral()
 }
 
 dependencies {
-    implementation("org.jetbrains.kotlin:kotlin-stdlib:$kotlinVersion")
-    implementation("org.jetbrains.kotlin:kotlin-test:$kotlinVersion")
-    implementation("io.ktor:ktor-server-netty:$ktorVersion")
-    implementation("ch.qos.logback:logback-classic:$logbackVersion")
     implementation("io.ktor:ktor-server-core:$ktorVersion")
-    implementation("io.ktor:ktor-mustache:$ktorVersion")
+    implementation("io.ktor:ktor-server-netty:$ktorVersion")
     implementation("io.ktor:ktor-server-host-common:$ktorVersion")
-    implementation("io.ktor:ktor-locations:$ktorVersion")
+    implementation("io.ktor:ktor-server-mustache:$ktorVersion")
     implementation("io.ktor:ktor-server-sessions:$ktorVersion")
-    implementation("io.ktor:ktor-websockets:$ktorVersion")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-core:1.0.1")
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
-    testImplementation("io.ktor:ktor-server-tests:$ktorVersion")
+    implementation("io.ktor:ktor-server-websockets:$ktorVersion")
+    implementation("io.ktor:ktor-server-compression:$ktorVersion")
+    implementation("io.ktor:ktor-server-call-logging:$ktorVersion")
+    implementation("io.ktor:ktor-server-default-headers:$ktorVersion")
+    implementation("ch.qos.logback:logback-classic:$logbackVersion")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:$serializationVersion")
+    testImplementation("io.ktor:ktor-server-test-host:$ktorVersion")
+    testImplementation(kotlin("test"))
 }
 
 plugins {
     application
-    kotlin("jvm") version "1.9.10"
-    kotlin("plugin.serialization") version "1.9.10"
-    id("com.github.johnrengelman.shadow") version "8.0.0"
+    kotlin("jvm") version "2.4.21"
+    kotlin("plugin.serialization") version "2.4.21"
+    id("com.gradleup.shadow") version "9.6.1"
 
     base
-    id("com.github.node-gradle.node") version "7.0.0"
+    id("com.github.node-gradle.node") version "7.1.0"
 }
 
 group = "com.kholland"
 version = "0.0.1-SNAPSHOT"
 
+kotlin {
+    jvmToolchain(25)
+}
+
 application {
     mainClass.set("io.ktor.server.netty.EngineMain")
 }
 
-tasks.withType<ShadowJar>() {
+tasks.shadowJar {
     archiveBaseName.set("app")
     archiveClassifier.set("")
     archiveVersion.set("")
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 kotlin.sourceSets["main"].kotlin.srcDirs("src")
@@ -59,25 +65,25 @@ defaultTasks("run")
 
 node {
     /* gradle-node-plugin configuration
-       https://github.com/srs/gradle-node-plugin/blob/master/docs/node.md
+       https://github.com/node-gradle/gradle-node-plugin/blob/main/docs/usage.md
        Task name pattern:
        ./gradlew npm_<command> Executes an NPM command.
     */
     // If true, it will download node using above parameters.
     // If false, it will try to use globally installed node.
-    download = true
+    download.set(true)
 
-    // Version of node to use.
-    version = "18.18.0"
-    distBaseUrl = "https://nodejs.org/dist"
+    // Version of node to use. Uses the npm bundled with it.
+    version.set("24.22.1")
+    distBaseUrl.set("https://nodejs.org/dist")
 
-    // Version of npm to use.
-    npmVersion = "10.1.0"
-
-    nodeProjectDir = file("frontend/")
+    nodeProjectDir.set(file("frontend/"))
 }
 
 tasks.named<NpmTask>("npm_run_build") {
+    // Rollup peaks around 1GB bundling Phaser; cap it so it can't starve small machines
+    environment.set(mapOf("NODE_OPTIONS" to "--max-old-space-size=1536"))
+
     // make sure the build task is executed only when appropriate files change
     inputs.files(fileTree("frontend/src"))
 

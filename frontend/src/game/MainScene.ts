@@ -1,3 +1,4 @@
+import Phaser from 'phaser'
 import { MessageBroker } from 'game/MessageBroker'
 import { PlayerManager } from 'game/PlayerManager'
 
