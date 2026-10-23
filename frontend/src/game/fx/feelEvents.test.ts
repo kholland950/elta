@@ -19,11 +19,11 @@ describe('restoresCharge', () => {
     const sink = recordingSink()
     const charge = { canStall: false, dashes: 0 }
     for (let frame = 0; frame < 5; frame++) {
-      if (restoresCharge(charge, 2)) sink.emit({ kind: 'recharge', x: 0, y: 0 })
+      if (restoresCharge(charge, 2)) sink.emit({ kind: 'recharge', playerId: 'a', x: 0, y: 0 })
       charge.canStall = true
       charge.dashes = 2
     }
-    expect(sink.events).toEqual([{ kind: 'recharge', x: 0, y: 0 }])
+    expect(sink.events).toEqual([{ kind: 'recharge', playerId: 'a', x: 0, y: 0 }])
   })
 })
 

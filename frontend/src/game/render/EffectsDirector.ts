@@ -37,7 +37,6 @@ const STALL_RING_MS = 360
 const COLLISION_RING_RADIUS = { from: 20, to: 220 }
 const COLLISION_RING_MS = 480
 const COLLISION_RING_TINT = 0xffc27a
-const DEFAULT_TINT = 0xffffff
 // Rings use the player colour mixed this far toward white so they read on black
 const LIGHTEN = 0.45
 // Dash exhaust sparks are nearly white-hot, with just a hint of the player colour
@@ -81,18 +80,25 @@ const burstConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
   emitting: false,
 }
 
+/** Finds a player's visuals by id; undefined when the player has not joined yet or has left. */
+export type VisualsLookup = (playerId: string) => PlayerVisuals | undefined
+
 /**
- * Turns feel events into effects. Emitters are created once and re-exploded; every per-event
- * image or graphics object is destroyed when its tween completes.
+ * Turns feel events into effects, for the local player and (relayed) remote players alike. Each
+ * event is drawn on the visuals of the player it names; events for unknown players are dropped.
+ * Emitters are created once and re-exploded; every per-event image or graphics object is
+ * destroyed when its tween completes.
  */
 export class EffectsDirector implements FeelSink {
   private scene: Phaser.Scene
   private cameraFX: CameraFX
   private profile: QualityProfile
-  private local?: PlayerVisuals
+  private visualsFor: VisualsLookup = () => undefined
+  private localId?: string
   private puff: Phaser.GameObjects.Particles.ParticleEmitter
   private burst: Phaser.GameObjects.Particles.ParticleEmitter
-  private afterimageTimer?: Phaser.Time.TimerEvent
+  /** One afterimage run per player, so two players dashing at once don't cut each other off. */
+  private afterimageTimers = new Map<string, Phaser.Time.TimerEvent>()
   /** Idle wisp images, reused; at most MAX_WISPS are ever created. */
   private freeWisps: Array<Phaser.GameObjects.Image> = []
   private wispCount = 0
@@ -108,10 +114,13 @@ export class EffectsDirector implements FeelSink {
     this.burst = scene.add.particles(0, 0, 'flares', burstConfig).setDepth(COLLISION_DEPTH)
   }
 
-  /** The local player's visuals: effect tint, afterimage texture and pulse come from it. */
-  public setLocalPlayer(visuals: PlayerVisuals) {
-    this.local = visuals
-    this.puff.setParticleTint(visuals.tint)
+  /**
+   * How to find each player's visuals (tint, afterimage texture, ignite and pulse come from
+   * them), and which player is local: only the local player's collisions shake the camera.
+   */
+  public setVisualsLookup(lookup: VisualsLookup, localId: string) {
+    this.visualsFor = lookup
+    this.localId = localId
   }
 
   public applyQuality(profile: QualityProfile) {
@@ -119,21 +128,36 @@ export class EffectsDirector implements FeelSink {
   }
 
   public emit(e: FeelEvent) {
+    const visuals = this.visualsFor(e.playerId)
+    if (!visuals) return
+    // Anchor on the orb as drawn here: the same point as e.x/e.y locally, and where the remote
+    // orb actually is rather than where its owner saw it a network hop ago
+    const { x, y } = visuals
     switch (e.kind) {
       case 'flap':
-        this.puff.explode(this.profile.puffCount, e.x, e.y + FLAP_OFFSET_Y)
+        // Tint is copied onto each particle at emit time, so one shared emitter serves every colour
+        this.puff.setParticleTint(visuals.tint)
+        this.puff.explode(this.profile.puffCount, x, y + FLAP_OFFSET_Y)
         break
       case 'dash':
-        this.pop()
-        this.local?.ignite()
-        this.afterimages()
-        this.wisps(e.dir)
+        this.pop(visuals)
+        visuals.ignite()
+        this.afterimages(e.playerId, visuals)
+        this.wisps(visuals, e.dir)
         break
       case 'stall':
-        this.ring(e.x, e.y, this.lightTint, STALL_RING_RADIUS, STALL_RING_MS, 0.9, BEHIND_ORB_DEPTH)
+        this.ring(
+          x,
+          y,
+          lighten(visuals.tint, LIGHTEN),
+          STALL_RING_RADIUS,
+          STALL_RING_MS,
+          0.9,
+          BEHIND_ORB_DEPTH,
+        )
         break
       case 'recharge':
-        this.local?.pulse()
+        visuals.pulse()
         break
       case 'collision':
         this.burst.explode(this.profile.burstCount, e.x, e.y)
@@ -146,26 +170,18 @@ export class EffectsDirector implements FeelSink {
           0.6,
           COLLISION_DEPTH,
         )
-        this.cameraFX.shake()
+        // Bystanders see the burst; only the players who collided feel it
+        const involvesLocal = e.playerId === this.localId || e.otherId === this.localId
+        if (involvesLocal) this.cameraFX.shake()
         break
     }
   }
 
-  private get tint() {
-    return this.local?.tint ?? DEFAULT_TINT
-  }
-
-  private get lightTint() {
-    return lighten(this.tint, LIGHTEN)
-  }
-
   /** A white flash at the orb on dash, between the halo and the orb. */
-  private pop() {
-    const local = this.local
-    if (!local) return
+  private pop(visuals: PlayerVisuals) {
     const flash = this.scene.add
-      .image(local.x, local.y, GLOW_TEXTURE)
-      .setTint(lighten(this.tint, POP_LIGHTEN))
+      .image(visuals.x, visuals.y, GLOW_TEXTURE)
+      .setTint(lighten(visuals.tint, POP_LIGHTEN))
       .setBlendMode(Phaser.BlendModes.ADD)
       .setScale(POP_SCALE.from)
       .setDepth(POP_DEPTH)
@@ -180,11 +196,9 @@ export class EffectsDirector implements FeelSink {
   }
 
   /** Drops fading copies of the orb at its position over the next few frames of the dash. */
-  private afterimages() {
-    const local = this.local
-    if (!local) return
-    this.afterimageTimer?.remove()
-    this.afterimageTimer = this.scene.time.addEvent({
+  private afterimages(playerId: string, local: PlayerVisuals) {
+    this.afterimageTimers.get(playerId)?.remove()
+    const timer = this.scene.time.addEvent({
       delay: AFTERIMAGE_INTERVAL_MS,
       repeat: this.profile.afterimages - 1,
       callback: () => {
@@ -201,18 +215,21 @@ export class EffectsDirector implements FeelSink {
           ease: 'Quad.easeOut',
           onComplete: () => ghost.destroy(),
         })
+        // The repeat count reads 0 on the final fire
+        if (timer.getRepeatCount() === 0 && this.afterimageTimers.get(playerId) === timer) {
+          this.afterimageTimers.delete(playerId)
+        }
       },
     })
+    this.afterimageTimers.set(playerId, timer)
   }
 
   /**
    * White-hot exhaust sparks shed from the orb over the dash's first moments. Each is born where the
    * orb is at its delay, then streaks backward and curls while it shrinks and fades (see `fx/wisps`).
    */
-  private wisps(dir: 1 | -1) {
-    const local = this.local
-    if (!local) return
-    const tint = lighten(this.tint, EXHAUST_LIGHTEN)
+  private wisps(local: PlayerVisuals, dir: 1 | -1) {
+    const tint = lighten(local.tint, EXHAUST_LIGHTEN)
     for (const seed of wispSeeds(this.profile.wisps)) {
       const mote = this.takeWisp()
       if (!mote) return

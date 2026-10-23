@@ -1,7 +1,20 @@
-/** Moments of player feedback, in world coordinates. `dir` is the dash direction (+1 right, -1 left). */
+/** Fields every feel event carries: who it happened to, and where in world coordinates. */
+interface FeelEventBase {
+  playerId: string
+  x: number
+  y: number
+}
+
+/**
+ * Moments of player feedback. `dir` is the dash direction (+1 right, -1 left); a collision is
+ * reported by `playerId` and names the player it hit as `otherId`.
+ */
 export type FeelEvent =
-  | { kind: 'dash'; x: number; y: number; dir: 1 | -1 }
-  | { kind: 'stall' | 'flap' | 'recharge' | 'collision'; x: number; y: number }
+  | (FeelEventBase & { kind: 'dash'; dir: 1 | -1 })
+  | (FeelEventBase & { kind: 'stall' | 'flap' | 'recharge' })
+  | (FeelEventBase & { kind: 'collision'; otherId: string })
+
+export type FeelEventKind = FeelEvent['kind']
 
 /** Port the game logic reports feel events to; the renderer decides what they look like. */
 export interface FeelSink {
