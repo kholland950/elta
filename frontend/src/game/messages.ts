@@ -1,3 +1,7 @@
+import type { PlayerActionMessage } from 'game/fx/actions'
+
+export type { PlayerActionMessage }
+
 export const TPS: number = 32
 
 export interface PlayerDataMessage {
@@ -33,7 +37,8 @@ export type ReceivableMessageData =
   | PlayerMoveMessage
   | GameStateMessage
   | PlayerLeftMessage
-export type SendableMessageData = NewPlayerMessage | PlayerMoveMessage
+  | PlayerActionMessage
+export type SendableMessageData = NewPlayerMessage | PlayerMoveMessage | PlayerActionMessage
 export type MessageData = ReceivableMessageData | SendableMessageData
 
 export enum MessageEventType {
@@ -41,6 +46,7 @@ export enum MessageEventType {
   PLAYER_MOVE = 'playerMove',
   PLAYER_LEFT = 'playerLeft',
   GAME_STATE = 'gameState',
+  PLAYER_ACTION = 'playerAction',
 }
 
 export interface WebSocketMessage {

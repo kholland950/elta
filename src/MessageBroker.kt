@@ -62,6 +62,8 @@ object MessageBroker {
         when (message.event) {
             "newPlayer" -> handleNewPlayer(Json.decodeFromJsonElement<NewPlayerMessage>(message.data), session)
             "playerMove" -> handlePlayerMove(Json.decodeFromJsonElement<PlayerMoveMessage>(message.data), session)
+            // Action effects (dash, stall, ...) are cosmetic, so relay them untouched
+            "playerAction" -> broadcastToOthers("playerAction", message.data, session)
         }
     }
 

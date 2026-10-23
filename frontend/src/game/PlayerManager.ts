@@ -110,8 +110,10 @@ export class PlayerManager {
     )
   }
 
-  public get localVisuals(): PlayerVisuals | undefined {
-    return this.localPlayer?.visuals
+  /** The visuals of the local or a remote player, if that player is currently in the game. */
+  public visualsFor(id: string): PlayerVisuals | undefined {
+    if (this.localPlayer?.id === id) return this.localPlayer.visuals
+    return this.remotePlayers.find((player) => player.id === id)?.visuals
   }
 
   /** Restores stall and dashes; feedback only fires when something was actually used up. */
@@ -123,13 +125,13 @@ export class PlayerManager {
   }
 
   private emitLocal(kind: 'flap' | 'stall' | 'recharge') {
-    const { x, y } = this.localPlayer.sprite
-    this.feel.emit({ kind, x, y })
+    const { id: playerId, sprite } = this.localPlayer
+    this.feel.emit({ kind, playerId, x: sprite.x, y: sprite.y })
   }
 
   private emitDash(dir: 1 | -1) {
-    const { x, y } = this.localPlayer.sprite
-    this.feel.emit({ kind: 'dash', x, y, dir })
+    const { id: playerId, sprite } = this.localPlayer
+    this.feel.emit({ kind: 'dash', playerId, x: sprite.x, y: sprite.y, dir })
   }
 
   private addRemotePlayer(player: Player) {
@@ -261,7 +263,17 @@ export class PlayerManager {
         const body1 = p1 as Phaser.Types.Physics.Arcade.GameObjectWithBody
         const body2 = p2 as Phaser.Types.Physics.Arcade.GameObjectWithBody
         if (body1.body === this.localPlayer.sprite.body || body2.body === this.localPlayer.sprite.body) {
-          this.feel.emit({ kind: 'collision', x: body1.body.center.x, y: body1.body.center.y })
+          const otherBody = body1.body === this.localPlayer.sprite.body ? body2.body : body1.body
+          const other = this.remotePlayers.find((player) => player.sprite.body === otherBody)
+          if (other) {
+            this.feel.emit({
+              kind: 'collision',
+              playerId: this.localPlayer.id,
+              otherId: other.id,
+              x: body1.body.center.x,
+              y: body1.body.center.y,
+            })
+          }
           this.recharge()
 
           if (body1.body.x > body2.body.x) {
@@ -352,7 +364,7 @@ export class PlayerManager {
     this.remotePlayers.forEach((player) => player.visuals.applyQuality(quality))
   }
 
-  private static generatePlayerId(): string {
+  public static generatePlayerId(): string {
     return '_' + Math.random().toString(36).substr(2, 9)
   }
 }

@@ -1,8 +1,10 @@
 import type { MainScene } from 'game/MainScene'
+import { fromActionMessage, shouldShowRemote } from 'game/fx/actions'
 import {
   GameStateMessage,
   MessageEventType,
   NewPlayerMessage,
+  PlayerActionMessage,
   PlayerLeftMessage,
   PlayerMoveMessage,
   ReceivableMessageData,
@@ -23,6 +25,11 @@ const messageHandlers: Record<string, Function> = {
   },
   [MessageEventType.GAME_STATE]: (data: GameStateMessage, scene: MainScene) => {
     scene.playerManager.updateGameState(data.players)
+  },
+  [MessageEventType.PLAYER_ACTION]: (data: PlayerActionMessage, scene: MainScene) => {
+    // Relayed unvalidated by the server, so parse defensively
+    const e = fromActionMessage(data)
+    if (e && shouldShowRemote(e, scene.localId)) scene.effects.emit(e)
   },
 }
 
@@ -74,6 +81,9 @@ export class MessageBroker {
         break
       case MessageEventType.GAME_STATE:
         data = message.data as GameStateMessage
+        break
+      case MessageEventType.PLAYER_ACTION:
+        data = message.data as PlayerActionMessage
         break
       default:
         data = message.data
