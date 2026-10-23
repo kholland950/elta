@@ -2,6 +2,9 @@
 ## a multiplayer web browser game
 
 ## Run
+Requires JDK 17+ to run Gradle (the build itself uses JDK 25, which Gradle downloads if it isn't installed).
+Gradle downloads Node 24 for the frontend build.
+
 Backend
 CLI:
 ```
@@ -40,4 +43,4 @@ Client Routing
 ## Dependencies
 Backend: Kotlin, Ktor
 
-Frontend: Typescipt, Phaser 3
+Frontend: Typescript, Svelte 5, Phaser 4

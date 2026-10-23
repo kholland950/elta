@@ -3,6 +3,7 @@
 /out
 /build
 /dist
+/.kotlin
 *.iml
 *.ipr
 *.iws

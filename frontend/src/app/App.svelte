@@ -11,8 +11,12 @@
   <style src="css/global.css"></style>
 </svelte:head>
 
+<!--
+  Routes render through slots: svelte-routing's `component` prop treats anything that
+  isn't a class as a lazy import, and Svelte 5 components are plain functions
+-->
 <Router>
-  <Route path="/" component={Main} />
-  <Route path="/joinroom/:id" component={JoinRoom} />
-  <Route path="/room/:id" component={Room} />
+  <Route path="/"><Main /></Route>
+  <Route path="/joinroom/:id" let:params><JoinRoom id={params.id} /></Route>
+  <Route path="/room/:id" let:params><Room id={params.id} /></Route>
 </Router>
