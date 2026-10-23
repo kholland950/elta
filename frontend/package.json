@@ -7,7 +7,8 @@
     "build": "rollup -c",
     "watch": "rollup -c -w",
     "dev": "npm-run-all --parallel start watch",
-    "start": "node proxy.js"
+    "start": "node proxy.js",
+    "test": "vitest run"
   },
   "author": "Kevin Holland",
   "license": "ISC",
@@ -28,7 +29,8 @@
     "rollup-plugin-copy": "^3.5.0",
     "rollup-plugin-livereload": "^2.0.5",
     "rollup-plugin-postcss": "^4.0.2",
-    "rollup-plugin-svelte": "^7.2.3"
+    "rollup-plugin-svelte": "^7.2.3",
+    "vitest": "^5.0.5"
   },
   "dependencies": {
     "phaser": "^4.2.1",

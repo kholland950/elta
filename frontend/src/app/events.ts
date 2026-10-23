@@ -15,8 +15,13 @@ class Events {
     this.events[name] = callback
   }
 
+  remove(name: string) {
+    delete this.events[name]
+  }
+
+  /** Calls the listener for `name`, if one is registered (the game may not have started yet). */
   send(name: string, ...args: any[]) {
-    this.events[name](...args)
+    this.events[name]?.(...args)
   }
 }
 
