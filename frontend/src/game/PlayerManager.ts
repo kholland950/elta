@@ -27,6 +27,9 @@ export interface MoveSink {
   sendMove(m: Omit<PlayerMoveMessage, 'playerId'>): void
 }
 
+/** Velocity change (px/s) too small to send on its own. */
+const SAME_VELOCITY = 1
+
 const playerConfig = {
   startingPosition: { x: 400, y: 400 },
   scale: 0.1,
@@ -73,7 +76,8 @@ export class PlayerManager {
   private bumps = new BumpCooldowns()
   /** Physics steps run since the scene started; the clock for bump cooldowns. */
   private steps = 0
-  private lastSent = { x: 0, y: 0 }
+  /** The last position and velocity sent; NaN means send on the next tick whatever it is. */
+  private lastSent = { x: 0, y: 0, velocityX: 0, velocityY: 0 }
   /** Remote players in the other world (lobby room vs match-end view); not shown, moves ignored. */
   private hidden: ReadonlySet<string> = new Set()
   /** Y of the energy sea surface; below it the orb is slowed. */
@@ -127,6 +131,22 @@ export class PlayerManager {
           const move = this.movedSinceLastSend()
           if (move) moves.sendMove(move)
         },
+      })
+      // A hidden tab pauses the game loop, so this orb freezes where it is and the tick above
+      // stops. Others would keep dead-reckoning it on its last velocity, so tell them it stopped,
+      // and send the real state again once the tab is back.
+      const events = this.scene.game.events
+      const onHidden = () => {
+        const { x, y } = player.sprite
+        this.lastSent = { x, y, velocityX: 0, velocityY: 0 }
+        moves.sendMove(this.lastSent)
+      }
+      const onVisible = () => this.resendPosition()
+      events.on(Phaser.Core.Events.HIDDEN, onHidden)
+      events.on(Phaser.Core.Events.VISIBLE, onVisible)
+      this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+        events.off(Phaser.Core.Events.HIDDEN, onHidden)
+        events.off(Phaser.Core.Events.VISIBLE, onVisible)
       })
     }
 
@@ -312,7 +332,7 @@ export class PlayerManager {
 
   /** Sends the local position on the next tick even if it has not changed. */
   public resendPosition() {
-    this.lastSent = { x: NaN, y: NaN }
+    this.lastSent = { x: NaN, y: NaN, velocityX: NaN, velocityY: NaN }
   }
 
   /**
@@ -343,16 +363,27 @@ export class PlayerManager {
     player.visuals.setPresence(placed ? 1 : 0)
   }
 
-  /** The local position and velocity, when the orb has moved more than a pixel since last sent. */
+  /**
+   * The local position and velocity, when either has changed since last sent. Remote orbs coast on
+   * the sent velocity, so a change of velocity alone must go out too: an orb that lands from a
+   * straight-up jump stops moving, and without a last move saying so it would keep falling (and
+   * sink through the floor) on everyone else's screen.
+   */
   private movedSinceLastSend(): Omit<PlayerMoveMessage, 'playerId'> | undefined {
     const sprite = this.localPlayer?.sprite
     if (!sprite) return undefined
     const { x, y } = sprite
-    // NaN (a resend was asked for) compares false, so it counts as moved
-    const moved = !(Math.abs(this.lastSent.x - x) <= 1 && Math.abs(this.lastSent.y - y) <= 1)
-    this.lastSent = { x, y }
-    if (!moved) return undefined
-    return { x, y, velocityX: sprite.body.velocity.x, velocityY: sprite.body.velocity.y }
+    const { x: velocityX, y: velocityY } = sprite.body.velocity
+    const last = this.lastSent
+    // NaN (a resend was asked for) compares false, so it counts as changed
+    const same =
+      Math.abs(last.x - x) <= 1 &&
+      Math.abs(last.y - y) <= 1 &&
+      Math.abs(last.velocityX - velocityX) <= SAME_VELOCITY &&
+      Math.abs(last.velocityY - velocityY) <= SAME_VELOCITY
+    if (same) return undefined
+    this.lastSent = { x, y, velocityX, velocityY }
+    return this.lastSent
   }
 
   public playerMoved(id: string, x: number, y: number, velocityX: number, velocityY: number) {
