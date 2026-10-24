@@ -35,6 +35,7 @@
   const validName = name?.match(/[\w\d ]+/) && name.length >= 2 && name.length <= 15
   let conn = null
   let session = readable(initialSession(id))
+  let status = 'connecting'
 
   if (!validName || !color) {
     setTimeout(() => navigate(`/joinroom/${id}`))
@@ -43,6 +44,8 @@
     conn = new RoomConnection({ roomId: id, name, color })
     session = createRoomStore(conn)
     const game = startGame(conn)
+    // conn.close() drops status listeners too
+    conn.onStatus((s) => (status = s))
 
     onDestroy(() => {
       conn.close()
@@ -52,6 +55,11 @@
   }
 
   onDestroy(() => events.remove('showScoreboard'))
+
+  const rejoin = (event) => {
+    event.currentTarget.blur()
+    window.location.reload()
+  }
 
   $: inLobby = meReturned($session) && $session.me !== null && !$session.rejected
   $: inResults = $session.phase === 'match' && $session.lastRoundEnd !== null && !meReturned($session) && !$session.rejected
@@ -91,6 +99,17 @@
   {/if}
   {#if $session.rejected}
     <Rejected reason={$session.rejected} {id} />
+  {:else if status === 'reconnecting'}
+    <div class="connection card" role="status">
+      <h2>Reconnecting…</h2>
+      <p>Your place in the room is saved</p>
+    </div>
+  {:else if status === 'lost'}
+    <div class="connection card" role="alert">
+      <h2>Connection lost</h2>
+      <p>Couldn't reach the server</p>
+      <button class="button" on:click={rejoin}>Rejoin</button>
+    </div>
   {/if}
 </main>
 
@@ -112,6 +131,16 @@
     height: 0.8em;
     border-radius: 50%;
     margin-right: 0.4em;
+  }
+
+  .connection {
+    max-width: 420px;
+    background-color: rgba(10, 14, 32, 0.9);
+  }
+
+  .connection h2 {
+    color: var(--secondary);
+    text-shadow: 0 0 14px rgba(255, 61, 154, 0.6);
   }
 
   .wins {

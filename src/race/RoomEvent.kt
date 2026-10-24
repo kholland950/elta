@@ -2,7 +2,8 @@ package com.kholland.race
 
 enum class EndReason { Finish, Timeout, Skipped }
 
-enum class JoinRejection { InProgress, Full, BadName, StaleBuild }
+/** [Expired] is the ws layer's: a resume whose seat is gone. The others come from [Room.join]. */
+enum class JoinRejection { InProgress, Full, BadName, StaleBuild, Expired }
 
 sealed interface RoomEvent {
     data class StateChanged(val room: Room) : RoomEvent

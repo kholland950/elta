@@ -2,6 +2,7 @@
 /.idea
 /out
 /build
+/bin
 /dist
 /.kotlin
 *.iml

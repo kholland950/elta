@@ -75,7 +75,7 @@ const roundEnd = (round: number, winnerId: string | null): RoundEndMessage => ({
 })
 
 const joinedAs = (me: string): MatchView =>
-  reduceMatch(emptyMatch(), { event: 'joined', data: { playerId: me, roomId: 'abcd', serverTime: 0 } })
+  reduceMatch(emptyMatch(), { event: 'joined', data: { playerId: me, roomId: 'abcd', serverTime: 0, resumeToken: 't' } })
 
 describe('reduceMatch', () => {
   it('shows the lobby room until the first roundStart, then that round', () => {
@@ -213,7 +213,7 @@ describe('MatchTracker', () => {
   it('collects messages that arrive before anyone listens and reports later ones', () => {
     const conn = new FakeConnection()
     const tracker = new MatchTracker(conn)
-    conn.emit('joined', { playerId: 'a', roomId: 'abcd', serverTime: 0 })
+    conn.emit('joined', { playerId: 'a', roomId: 'abcd', serverTime: 0, resumeToken: 't' })
     conn.emit('roomState', roomState('match', ['a', 'b']))
     conn.emit('roundStart', roundStart(1))
     expect(tracker.view.me).toBe('a')
@@ -330,7 +330,7 @@ describe('return to lobby', () => {
   it('is tracked by MatchTracker', () => {
     const conn = new FakeConnection()
     const tracker = new MatchTracker(conn)
-    conn.emit('joined', { playerId: 'a', roomId: 'abcd', serverTime: 0 })
+    conn.emit('joined', { playerId: 'a', roomId: 'abcd', serverTime: 0, resumeToken: 't' })
     conn.emit('roomState', roomState('match', ['a', 'b']))
     conn.emit('roundStart', roundStart(1))
     conn.emit('lobbyReturn', { returned: ['a'], lobbyAt: 60000 })

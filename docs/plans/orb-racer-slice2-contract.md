@@ -14,7 +14,7 @@ Every frame is JSON `{"event": string, "data": object}`. Times are **server epoc
 ### Client → server
 | event | data | rules |
 |---|---|---|
-| `joinRoom` | `{roomId: string, name: string, color: string, build: string}` | Must be the first frame. `roomId` matches `^[a-z0-9]{4,12}$`. `name` is 2–15 characters matching `^[\w ]+$`. `color` is one of `Blue Green Orange Red Violet Yellow`. |
+| `joinRoom` | `{roomId: string, name: string, color: string, build: string, resumeToken?: string}` | Must be the first frame. With `resumeToken`, reattaches to a held seat (§7). `roomId` matches `^[a-z0-9]{4,12}$`. `name` is 2–15 characters matching `^[\w ]+$`. `color` is one of `Blue Green Orange Red Violet Yellow`. |
 | `clockPing` | `{t0: number}` | Any time after `joined`. |
 | `updateSettings` | `{winsToMatch: 1\|3\|5\|7, difficulty: 1..10}` | Host only, lobby only. Anything else is silently ignored. |
 | `startMatch` | `{}` | Host only, lobby only. Works with ≥1 player. |
@@ -26,11 +26,11 @@ Every frame is JSON `{"event": string, "data": object}`. Times are **server epoc
 ### Server → client
 | event | data | when |
 |---|---|---|
-| `joined` | `{playerId, roomId, serverTime}` | Reply to an accepted `joinRoom`. It is followed immediately by `roomState`, sent to everyone. |
-| `joinRejected` | `{reason: "inProgress"\|"full"\|"badName"\|"staleBuild"}` | Reply to a rejected `joinRoom`. The server then closes the socket. |
+| `joined` | `{playerId, roomId, serverTime, resumeToken}` | Reply to an accepted `joinRoom`. It is followed immediately by `roomState`, sent to everyone. |
+| `joinRejected` | `{reason: "inProgress"\|"full"\|"badName"\|"staleBuild"\|"expired"}` | Reply to a rejected `joinRoom`. The server then closes the socket. |
 | `clockPong` | `{t0, serverTime}` | Reply to `clockPing`. `t0` is echoed back. |
 | `roomState` | `{roomId, hostId, phase: "lobby"\|"match", settings: {winsToMatch, difficulty}, players: [{id, name, color, wins}]}` | Sent to everyone on any change to membership, host, settings, phase or wins. `players` is in join order. |
-| `playerLeft` | `{playerId}` | Sent to the rest of the room when a socket closes, before the `roomState` that follows. |
+| `playerLeft` | `{playerId}` | Sent to the rest of the room when a player leaves (a clean close, or a held seat running out; §7), before the `roomState` that follows. |
 | `roundStart` | `{round, seed, difficulty, startOrder: [playerId], exploreAt, snapAt, goAt}` | Sent to everyone at the start of each round. `round` counts from 1 within a match. |
 | `skipVotes` | `{round, votes, needed}` | Sent to everyone whenever the vote count or `needed` changes during a round. |
 | `roundEnd` | `{round, winnerId: string\|null, reason: "finish"\|"timeout"\|"skipped", times: [{playerId, raceTimeMs}], wins: {[playerId]: number}, nextRoundAt: number\|null, matchWinnerId: string\|null}` | Sent to everyone. `times` holds the reports the server accepted, sorted by time. On match end, `matchWinnerId` is set and `nextRoundAt` is `null`. |
@@ -180,3 +180,23 @@ Until the phaser agent lands real predicates, a stub returning `ok: true` is acc
   It rasterises `stage.grid` (rock, open space, pads, sea) and overlays the spine, the finish, the bays, fork branches (high and low in two colours, when present) and W-heading segments (tinted, when ports have `dir`).
 - `frontend/src/app/Gallery.svelte` is mounted from `main.ts` only when `?gallery` is set **and** `__BUILD_ID__ === 'dev'` (or undefined). Params: `?gallery=<baseSeed>&diff=<1..10, default 4>&bays=<1..8, default 4>`. It shows 12 stages with archetype `ARCHETYPES[i % 5]` and seed `base + i`. Each card shows the archetype, seed, difficulty, par, the `stageStats` and the `checkCeilings`/`checkGuarantee` results.
 - The archetype is never shown in the game HUD or the Svelte room UI.
+
+## 7. Addendum: reconnecting (2026-10-24)
+- **Seat hold (server):**
+  - A socket that closes with code 1000 (normal) or 1001 (going away) leaves at once, as before.
+  - Any other end (no close frame, a ping timeout, an error, or a client's 4000) keeps the player in the room for **30 s**. They still count for skip votes and start order, and other clients keep their orb. If the hold runs out, they leave as usual (`playerLeft`, then `roomState`).
+- **Resume:**
+  - `joined.resumeToken` is a secret per seat. A `joinRoom` carrying it reattaches to the seat with the same `playerId`, in any phase. `name`, `color` and `build` are not checked.
+  - A resume answers `joined` (to the resumer only), then a snapshot: `roomState`, then by phase:
+    - Round: `roundStart`, plus `skipVotes` if any are cast.
+    - Results: the last `roundStart` and `roundEnd`.
+    - Match over: the last `roundStart` and `roundEnd`, then `lobbyReturn`.
+  - Clients ignore repeats of these as before.
+  - A resume for a seat that is gone is rejected with `expired`. If the seat still has a connection the server hadn't noticed was dead, that connection is closed and the resume takes its place.
+- **Client (`RoomConnection`):**
+  - On a close it retries after 250, 500, 1000, 2000, 4000, then 5000 ms, and gives up after 30 s (`lost`). `joinRejected` also stops it.
+  - Listeners stay attached across retries. While down, moves and actions are dropped. `finishReport`, `voteSkip`, `updateSettings`, `startMatch` and `returnToLobby` wait and are sent after the resume.
+  - While connected it sends a `clockPing` every 4 s, unless the last one is unanswered. If nothing arrives within 8 s of it, the link is treated as dead: the client closes with 4000 and retries.
+  - `close()` closes with 1000.
+  - New members: `get status(): 'connecting'|'connected'|'reconnecting'|'lost'` and `onStatus(cb): () => void`.
+- **`Room.svelte`** shows a "Reconnecting…" card while `reconnecting`, and "Connection lost" with Rejoin (reload) when `lost`. A rejection shows the Rejected screen instead.

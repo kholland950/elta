@@ -19,9 +19,9 @@ class RoomFlowTest {
         finishWindowMs = 60, resultsMs = 300, matchOverMs = 5_000, roundTimeoutMs = 120_000,
     )
 
-    private fun ApplicationTestBuilder.boot() {
+    private fun ApplicationTestBuilder.boot(reconnectGraceMs: Long = 30_000) {
         environment { config = MapApplicationConfig() }
-        application { appModule(RoomEnv(timings, Random(5))) }
+        application { appModule(RoomEnv(timings, Random(5)), reconnectGraceMs = reconnectGraceMs) }
     }
 
     private inner class Client(val session: DefaultClientWebSocketSession) {
@@ -51,12 +51,13 @@ class RoomFlowTest {
         kotlinx.coroutines.withTimeoutOrNull(ms) { block() }
 
     private suspend fun ApplicationTestBuilder.connect(
-        room: String, name: String, build: String = "b1", color: String = "Blue",
+        room: String, name: String, build: String = "b1", color: String = "Blue", resumeToken: String? = null,
     ): Client {
         val http = createClient { install(WebSockets) }
         val c = Client(http.webSocketSession("/ws/game"))
         c.send("joinRoom", buildJsonObject {
             put("roomId", room); put("name", name); put("color", color); put("build", build)
+            if (resumeToken != null) put("resumeToken", resumeToken)
         })
         return c
     }
@@ -186,6 +187,86 @@ class RoomFlowTest {
         assertEquals(idB, state.str("hostId"))
         assertEquals(1, state["players"]!!.jsonArray.size)
         b.session.close()
+    }
+
+    /** Closes like a dead link: a code that is neither a normal close nor going away. */
+    private suspend fun Client.dropLink() = session.close(CloseReason(4000, "link lost"))
+
+    @Test
+    fun droppedPlayerKeepsSeatAndResumesMidRound() = testApplication {
+        boot()
+        val a = connect("roomdrop", "alice")
+        val joinedA = a.until("joined")
+        val idA = joinedA.str("playerId")
+        val token = joinedA.str("resumeToken")
+        a.until("roomState")
+        val b = connect("roomdrop", "bob", color = "Red")
+        b.until("roomState")
+        a.until("roomState")
+        a.send("startMatch")
+        val start = b.until("roundStart")
+
+        a.dropLink()
+        b.expectSilence() // no playerLeft: the seat is held
+
+        val a2 = connect("roomdrop", "alice", resumeToken = token)
+        val resumed = a2.until("joined")
+        assertEquals(idA, resumed.str("playerId"))
+        assertEquals(token, resumed.str("resumeToken"))
+        assertEquals(2, a2.until("roomState")["players"]!!.jsonArray.size)
+        assertEquals(start, a2.until("roundStart"))
+
+        // Moves reach the new connection
+        b.send("playerMove", buildJsonObject { put("x", 1.0); put("y", 2.0); put("velocityX", 0); put("velocityY", 0) })
+        assertEquals(1.0, a2.until("playerMove").getValue("x").jsonPrimitive.double)
+        listOf(a2, b).forEach { it.session.close() }
+    }
+
+    @Test
+    fun heldSeatIsReleasedWhenGraceRunsOut() = testApplication {
+        boot(reconnectGraceMs = 200)
+        val a = connect("roomgone", "alice")
+        val joinedA = a.until("joined")
+        a.until("roomState")
+        val b = connect("roomgone", "bob", color = "Red")
+        b.until("roomState")
+
+        a.dropLink()
+        assertEquals(joinedA.str("playerId"), b.until("playerLeft").str("playerId"))
+        assertEquals(1, b.until("roomState")["players"]!!.jsonArray.size)
+
+        val late = connect("roomgone", "alice", resumeToken = joinedA.str("resumeToken"))
+        assertEquals("expired", late.until("joinRejected").str("reason"))
+        b.session.close()
+    }
+
+    @Test
+    fun resumeReplacesAConnectionTheServerStillHolds() = testApplication {
+        boot()
+        val a = connect("roomswap", "alice")
+        val joinedA = a.until("joined")
+        a.until("roomState")
+        val b = connect("roomswap", "bob", color = "Red")
+        b.until("roomState")
+
+        val a2 = connect("roomswap", "alice", resumeToken = joinedA.str("resumeToken"))
+        assertEquals(joinedA.str("playerId"), a2.until("joined").str("playerId"))
+        // The old connection is closed by the server, and its close doesn't take the seat with it
+        withTimeout(5_000) { while (a.session.incoming.receiveCatching().isSuccess) Unit }
+        b.expectSilence()
+        a2.send("playerMove", buildJsonObject { put("x", 3.0); put("y", 0); put("velocityX", 0); put("velocityY", 0) })
+        assertEquals(3.0, b.until("playerMove").getValue("x").jsonPrimitive.double)
+        listOf(a2, b).forEach { it.session.close() }
+    }
+
+    @Test
+    fun resumeWithUnknownTokenIsRejected() = testApplication {
+        boot()
+        val a = connect("roomtok", "alice")
+        a.until("roomState")
+        val c = connect("roomtok", "carol", resumeToken = "not-a-token")
+        assertEquals("expired", c.until("joinRejected").str("reason"))
+        a.session.close()
     }
 
     @Test
