@@ -622,8 +622,8 @@ const toSegment = (plan: SegmentPlan): Segment => {
  * Generates the stage for a seed, difficulty and bay count (one start bay per player in the
  * round, clamped to 1–8; solo uses 1): the bay stack and start chamber, weighted tunnel segments
  * joined mouth to mouth until the summed par reaches TARGET_PAR_MS, then the finish chamber. Rock
- * fills everything else; the air under the tunnels is split by curtains (pillars down to the sea
- * surface) at every segment start. One PRNG stream and integer arithmetic only, so every client
+ * fills everything else; the air and sea under the tunnels are split by curtains (pillars down to the
+ * sea floor) at every segment start. One PRNG stream and integer arithmetic only, so every client
  * builds the identical stage.
  */
 export const generateStage = (
