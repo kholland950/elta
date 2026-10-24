@@ -132,7 +132,7 @@ export interface StageReach {
   stuckStarts: Array<number>
   /** The orb can get from some start into the sea (through a chamber pit). */
   seaReachableFromStart: boolean
-  /** From the sea floor the finish is reachable again: the sea is never a softlock. */
+  /** From every sea pool a start can reach, the finish is reachable again: the sea is never a softlock. */
   seaToFinish: boolean
 }
 
@@ -144,28 +144,42 @@ export interface ReachTargets {
 }
 
 /**
- * Whole-stage check. The sea floor is one connected strip (curtains stop at the sea surface), so a
- * single run from any sea-floor cell stands for every sea node.
+ * Whole-stage check. Curtains split the sea into pools, so a run from each pool's floor stands for
+ * that pool; every pool some start can fall into must lead back to the finish.
  */
 export const checkGrid = (g: CellGrid, targets: ReachTargets, opts: ReachOptions): StageReach => {
   const seaFloorRow = g.row0 + g.rows - 1
-  let seaReachableFromStart = false
-  const stuckStarts: Array<number> = []
   const prepared = prepare(g, opts)
+  // Pools as column runs of open sea floor
+  const pools: Array<{ c0: number; c1: number }> = []
+  for (let col = g.col0; col < g.col0 + g.cols; col++) {
+    if (cellAt(g, col, seaFloorRow) !== OPEN) continue
+    const last = pools[pools.length - 1]
+    if (last && last.c1 === col) last.c1 = col + 1
+    else pools.push({ c0: col, c1: col + 1 })
+  }
+  const entered = new Uint8Array(pools.length)
+  const stuckStarts: Array<number> = []
   targets.starts.forEach((start, index) => {
     const fromStart = run(prepared, [start])
     if (!targets.finish.some((i) => fromStart[i] >= 0)) stuckStarts.push(index)
-    for (let col = g.col0; col < g.col0 + g.cols && !seaReachableFromStart; col++) {
-      for (let row = 0; row <= seaFloorRow; row++) {
-        if (fromStart[(row - g.row0) * g.cols + (col - g.col0)] >= 0) seaReachableFromStart = true
+    pools.forEach((pool, p) => {
+      for (let col = pool.c0; col < pool.c1 && !entered[p]; col++) {
+        for (let row = 0; row <= seaFloorRow; row++) {
+          if (fromStart[(row - g.row0) * g.cols + (col - g.col0)] >= 0) entered[p] = 1
+        }
       }
-    }
+    })
   })
-  const fromSea = run(prepared, [(seaFloorRow - g.row0) * g.cols])
+  const seaToFinish = pools.every((pool, p) => {
+    if (!entered[p]) return true
+    const fromSea = run(prepared, [(seaFloorRow - g.row0) * g.cols + (pool.c0 - g.col0)])
+    return targets.finish.some((i) => fromSea[i] >= 0)
+  })
   return {
     startToFinish: targets.starts.length > 0 && stuckStarts.length === 0,
     stuckStarts,
-    seaReachableFromStart,
-    seaToFinish: targets.finish.some((i) => fromSea[i] >= 0),
+    seaReachableFromStart: entered.some((e) => e === 1),
+    seaToFinish,
   }
 }

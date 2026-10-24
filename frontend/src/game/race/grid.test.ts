@@ -59,6 +59,10 @@ describe('buildGrid', () => {
     })
     const curtain = (col: number) => cellAt(g, col, -1) === SOLID
     expect([...Array(12).keys()].filter(curtain)).toEqual([4, 8])
+    // Curtains carry on through the sea to its floor; the rest of the sea stays open
+    for (const row of [0, 1]) {
+      expect([...Array(12).keys()].filter((col) => cellAt(g, col, row) === SOLID)).toEqual([4, 8])
+    }
   })
 
   // The ownership rule must give exactly the old curtains (every segment's entry column) on a

@@ -19,11 +19,11 @@ describe('generateStage', () => {
     expect(ARCHETYPES.map((a, i) => `${a} ${hashStage(generateStage(1 + i * 1000, 1 + i * 2, 1 + i, a))}`))
       .toMatchInlineSnapshot(`
         [
-          "tower 74ee499a",
-          "descent 7bf4c34e",
-          "labyrinth acbad711",
-          "speedway a46331de",
-          "canyon 9717d53c",
+          "tower 13c6ef90",
+          "descent b81ab6be",
+          "labyrinth ace0d02b",
+          "speedway 1c0a0cb8",
+          "canyon e8fc3a32",
         ]
       `)
   })

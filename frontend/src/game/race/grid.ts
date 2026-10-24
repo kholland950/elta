@@ -5,7 +5,8 @@
  * same stage everywhere.
  *
  * Rows grow downward. Row 0 is the first row of the sea (the sea surface is the top edge of row 0)
- * and the sea fills `SEA_ROWS` rows down to the world bottom.
+ * and the sea fills `SEA_ROWS` rows down to the world bottom. Curtains run through the sea to its
+ * floor, so the sea is split into one pool per stretch between them.
  */
 
 export const OPEN = 0
@@ -59,10 +60,10 @@ export const cellAt = (g: CellGrid, col: number, row: number): number => {
 /**
  * Builds the grid. Per column: carved cells are open; rock fills everything above the lowest
  * carved cell and one shell row below it; below that is open air down to the sea, except in
- * curtain columns, which stay rock down to the sea surface. A column is a curtain where the owner
+ * curtain columns, which stay rock down to the sea floor. A column is a curtain where the owner
  * of its lowest carve differs from the owner of the previous column's (both owned), so the air
- * under one segment is walled off from the next. A column with no carves is rock down to the sea
- * surface. The sea rows are always open; a pit is a carve down to the sea surface.
+ * (and the sea) under one segment is walled off from the next. A column with no carves is rock
+ * down to the sea floor. Elsewhere the sea rows are open; a pit is a carve down to the sea surface.
  */
 export const buildGrid = (spec: GridSpec): CellGrid => {
   const cols = spec.col1 - spec.col0
@@ -95,10 +96,12 @@ export const buildGrid = (spec: GridSpec): CellGrid => {
   for (let ci = 0; ci < cols; ci++) {
     let lowest = -1
     for (let ri = 0; ri < -spec.row0; ri++) if (carved[ri * cols + ci]) lowest = ri
+    // Rock that reaches the sea surface (a curtain or an uncarved column) carries on to the sea floor
+    const wall = lowest < 0 || (isCurtain[ci] === 1 && lowest + 1 < -spec.row0 - 1)
     for (let ri = 0; ri < rows; ri++) {
       const row = ri + spec.row0
       let state = SOLID
-      if (row >= 0) state = OPEN
+      if (row >= 0) state = wall ? SOLID : OPEN
       else if (carved[ri * cols + ci]) state = OPEN
       else if (lowest < 0 || ri < lowest) state = SOLID
       else if (ri === lowest + 1) state = SOLID
