@@ -51,13 +51,14 @@ export const controlsLocked = (phase: RoundPhase): boolean =>
 export const gateOpen = (phase: RoundPhase): boolean => phase.kind === 'explore' || phase.kind === 'race'
 
 const inGate = (gate: FinishGate, p: { x: number; y: number }) =>
-  p.x >= gate.x && p.y >= gate.top && p.y <= gate.bottom
+  p.x >= gate.x && p.x <= gate.right && p.y >= gate.top && p.y <= gate.bottom
 
 /**
  * Race time of the step that moved the orb from `prev` into the finish region, interpolated to
  * where on that step it crossed. `step` counts physics steps since GO, so the orb was at `prev`
  * at (step - 1) × stepMs and at `cur` at step × stepMs. Undefined when this step did not finish.
- * The region is x ≥ gate.x within the chamber's rows, so entering it from above or below counts.
+ * The region is gate.x ≤ x ≤ gate.right within the chamber's rows, so entering it from above or
+ * below counts, but only inside the finish room.
  */
 export const finishCrossing = (
   prev: { x: number; y: number },
@@ -70,6 +71,7 @@ export const finishCrossing = (
   // Entry fraction into the convex region: the latest of the boundary crossings prev was outside
   let t = 0
   if (prev.x < gate.x) t = Math.max(t, (gate.x - prev.x) / (cur.x - prev.x))
+  if (prev.x > gate.right) t = Math.max(t, (prev.x - gate.right) / (prev.x - cur.x))
   if (prev.y > gate.bottom) t = Math.max(t, (prev.y - gate.bottom) / (prev.y - cur.y))
   if (prev.y < gate.top) t = Math.max(t, (gate.top - prev.y) / (cur.y - prev.y))
   return (step - 1 + t) * stepMs

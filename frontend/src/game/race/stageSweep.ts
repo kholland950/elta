@@ -1,7 +1,20 @@
 import { describe, expect, it } from 'vitest'
-import { checkStage, generateStage } from './generateStage'
-import { OPEN, SOLID } from './grid'
+import { Archetype, ARCHETYPES } from './archetype'
+import {
+  BACKTRACK_COLS,
+  checkStage,
+  generateStage,
+  generateStagePlan,
+  reachOptions,
+  reachTargets,
+  SEP,
+  StagePlan,
+  stageFromPlan,
+} from './generateStage'
+import { reachFrom, solidify } from './reach'
+import { CellRect, OPEN, SOLID } from './grid'
 import { MAX_BAYS } from './segments'
+import { checkCeilings, checkGuarantee, isWest } from './stageChecks'
 import type { RaceStage, Rect, Stage } from './stage'
 import { ORB_RADIUS } from './tuning'
 
@@ -47,6 +60,79 @@ const isInt = (n: number) => Number.isInteger(n)
 /** Bay count the sweep uses for a seed: every count from 1 to 8 comes round in turn. */
 export const sweepBays = (seed: number) => 1 + (seed % MAX_BAYS)
 
+/** Archetype the sweep uses for a seed: changes every 8 seeds, so every bay count meets every archetype. */
+export const sweepArchetype = (seed: number): Archetype => ARCHETYPES[Math.floor(seed / 8) % ARCHETYPES.length]
+
+const gapCells = (a: CellRect, b: CellRect) => Math.max(b.c0 - a.c1, a.c0 - b.c1, b.r0 - a.r1, a.r0 - b.r1, 0)
+
+/**
+ * Net rightward progress: the finish room starts right of every other opening (so the finish
+ * region holds only finish-room cells), and no segment opens further left than BACKTRACK_COLS
+ * behind the furthest column reached before it. Returns why not, or undefined.
+ */
+export const checkRightward = (plan: StagePlan): string | undefined => {
+  const finish = plan.plans[plan.plans.length - 1]
+  const room = finish.chambers[0]
+  let frontier = 0
+  for (let i = 0; i < plan.plans.length - 1; i++) {
+    const open = [...plan.plans[i].carves, ...plan.plans[i].pits]
+    for (const r of open) {
+      if (r.c1 >= room.c0) return `${plan.plans[i].type} #${i} reaches column ${r.c1}, finish room at ${room.c0}`
+      if (i > 0 && r.c0 < frontier - BACKTRACK_COLS) return `${plan.plans[i].type} #${i} backtracks to ${r.c0} from ${frontier}`
+    }
+    for (const r of open) frontier = Math.max(frontier, r.c1)
+  }
+  return undefined
+}
+
+/** Forks per archetype: [fewest, most]. */
+export const FORK_COUNTS: Record<Archetype, [number, number]> = {
+  tower: [1, 1],
+  descent: [1, 1],
+  labyrinth: [2, 2],
+  speedway: [0, 1],
+  canyon: [1, 1],
+}
+
+/**
+ * Each fork branch on its own: with the other branch turned to rock, the finish is still
+ * reachable from the first bay. Returns why not, or undefined.
+ */
+export const checkForkBranches = (s: RaceStage): string | undefined => {
+  const forks = s.segments.filter((seg) => seg.fork)
+  const n = forks.length
+  const [lo, hi] = FORK_COUNTS[s.archetype]
+  if (n < lo || n > hi) return `${n} forks, wanted ${lo}–${hi}`
+  if (n === 0) return undefined
+  const targets = reachTargets(s)
+  const cells = (r: Rect) => ({ c0: r.x / s.cell, r0: r.y / s.cell, c1: (r.x + r.w) / s.cell, r1: (r.y + r.h) / s.cell })
+  for (const seg of forks) {
+    for (const [branch, shut] of [['low', seg.fork!.high], ['high', seg.fork!.low]] as const) {
+      const reach = reachFrom(solidify(s.grid, shut.map(cells)), [targets.starts[0]], reachOptions)
+      if (!targets.finish.some((i) => reach[i] >= 0)) return `the ${branch} branch alone does not reach the finish`
+    }
+  }
+  return undefined
+}
+
+/**
+ * Whether segments keep SEP cells of rock between their openings, apart from neighbours touching
+ * where they join. Returns why not, or undefined.
+ */
+export const checkSeparation = (plan: StagePlan): string | undefined => {
+  const open = plan.plans.map((p) => [...p.carves, ...p.pits])
+  for (let i = 0; i < open.length; i++) {
+    for (let j = 0; j < i - 1; j++) {
+      for (const a of open[i]) {
+        for (const b of open[j]) {
+          if (gapCells(a, b) < SEP) return `${plan.plans[i].type} #${i} within ${SEP} of ${plan.plans[j].type} #${j}`
+        }
+      }
+    }
+  }
+  return undefined
+}
+
 /**
  * Whether the start bays are laid out as specified: one spawn per bay, each bay a closed box
  * (back wall, floor, ceiling) whose only opening is on the right, where its gate sits across open
@@ -89,20 +175,32 @@ export const checkBays = (s: RaceStage, bays: number): string | undefined => {
 export const defineSweep = (difficulties: ReadonlyArray<number>) => {
   /** Every seed × difficulty, generated once and shared by the property checks below. */
   const stages: Array<RaceStage> = []
+  const plans = new Map<RaceStage, StagePlan>()
   for (const d of difficulties) {
-    for (let seed = 1; seed <= SEEDS; seed++) stages.push(generateStage(seed * 2654435761, d, sweepBays(seed)))
+    for (let seed = 1; seed <= SEEDS; seed++) {
+      const s = (seed * 2654435761) >>> 0
+      const plan = generateStagePlan(s, d, sweepBays(seed), sweepArchetype(seed))
+      const stage = stageFromPlan(plan, s, d, sweepArchetype(seed))
+      plans.set(stage, plan)
+      stages.push(stage)
+    }
   }
 
   const failures = (check: (s: RaceStage) => string | undefined) =>
     stages.flatMap((s) => {
       const why = check(s)
-      return why ? [`seed ${s.seed} diff ${s.difficulty} bays ${s.bays.length}: ${why}`] : []
+      return why ? [`seed ${s.seed} ${s.archetype} diff ${s.difficulty} bays ${s.bays.length}: ${why}`] : []
     })
 
   describe(`generateStage sweep, difficulty ${difficulties.join(', ')}`, { timeout: 120000 }, () => {
+    // Every 4th stage (still every archetype and bay count): regenerating all of them was a fifth
+    // of the sweep's time
     it('is deterministic', () => {
       const bad = failures((s) =>
-        hashStage(generateStage(s.seed, s.difficulty, s.bays.length)) === hashStage(s) ? undefined : 'differs',
+        stages.indexOf(s) % 4 !== 0 ||
+        hashStage(generateStage(s.seed, s.difficulty, s.bays.length, s.archetype)) === hashStage(s)
+          ? undefined
+          : 'differs',
       )
       expect(bad.slice(0, 5)).toEqual([])
     })
@@ -220,9 +318,65 @@ export const defineSweep = (difficulties: ReadonlyArray<number>) => {
       expect(slots).toBeGreaterThan(100)
     })
 
-    it('uses every slice 1 segment type', () => {
+    it('keeps the run and streak ceilings (Speedway exempt)', () => {
+      const bad = failures((s) => {
+        const c = checkCeilings(s)
+        return c.ok ? undefined : c.detail
+      })
+      expect(bad.slice(0, 5)).toEqual([])
+    })
+
+    it('keeps SEP cells of rock between segments that do not join', () => {
+      const bad = failures((s) => checkSeparation(plans.get(s)!))
+      expect(bad.slice(0, 5)).toEqual([])
+    })
+
+    it('covers every archetype and rarely restarts (≥ 99.5% of stages without a restart)', () => {
+      expect([...new Set(stages.map((s) => s.archetype))].sort()).toEqual([...ARCHETYPES].sort())
+      const restarted = failures((s) => (plans.get(s)!.stats.restarts > 0 ? `${plans.get(s)!.stats.restarts} restarts` : undefined))
+      expect(restarted.length * 1000).toBeLessThanOrEqual(stages.length * 5)
+      expect(failures((s) => (plans.get(s)!.stats.relaxed ? 'needed the relaxed attempt' : undefined))).toEqual([])
+    })
+
+    it("builds each archetype's guarantee", () => {
+      const bad = failures((s) => {
+        const c = checkGuarantee(s)
+        return c.ok ? undefined : c.detail
+      })
+      expect(bad.slice(0, 5)).toEqual([])
+    })
+
+    it('makes net progress rightward: finish room right of everything, backtracking bounded', () => {
+      const bad = failures((s) => checkRightward(plans.get(s)!))
+      expect(bad.slice(0, 5)).toEqual([])
+    })
+
+    it('places the fork count for each archetype, every branch passable on its own', () => {
+      const bad = failures(checkForkBranches)
+      expect(bad.slice(0, 5)).toEqual([])
+    })
+
+    it('turns: more than 100 leftward segments', () => {
+      const west = stages.reduce((n, s) => n + s.segments.filter(isWest).length, 0)
+      expect(west).toBeGreaterThan(100)
+    })
+
+    it('uses every segment type, and ports facing up and down', () => {
       const types = new Set(stages.flatMap((s) => s.segments.map((seg) => seg.type)))
-      expect([...types].sort()).toEqual(['finish', 'run', 'shaftDown', 'shaftUp', 'stallChamber', 'start'])
+      expect([...types].sort()).toEqual([
+        'chamber',
+        'chimney',
+        'finish',
+        'fork',
+        'run',
+        'shaftDown',
+        'shaftUp',
+        'stallChamber',
+        'start',
+        'switchback',
+      ])
+      const dirs = new Set(stages.flatMap((s) => s.segments.map((seg) => seg.exit.dir)))
+      expect([...dirs].sort()).toEqual(['E', 'N', 'S', 'W'])
     })
   })
 }

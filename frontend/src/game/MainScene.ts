@@ -22,7 +22,7 @@ import {
 } from 'game/race/match'
 import type { PlayerMoveMessage, RoundStartMessage } from 'game/race/protocol'
 import type { RaceStage, Stage } from 'game/race/stage'
-import { parseStageParams, randomSeed, StageParams, withStageParams } from 'game/race/stageParams'
+import { parseStageParams, randomSeed, stageArchetype, StageParams, withStageParams } from 'game/race/stageParams'
 import type { RoomConnection } from 'game/net/RoomConnection'
 import { BackgroundRenderer } from 'game/render/BackgroundRenderer'
 import { CameraFX } from 'game/render/CameraFX'
@@ -169,9 +169,15 @@ export class MainScene extends Phaser.Scene {
 
   /** Solo: the stage from the URL, and R for a new one. */
   private startSolo(): Array<() => void> {
-    this.loadSoloStage(parseStageParams(window.location.search))
+    const params = parseStageParams(window.location.search)
+    this.loadSoloStage(params)
+    // A new stage keeps an asked-for `?arch=`; without one each seed brings its own archetype
+    const archetype = params.archetype
     const onR = (event: KeyboardEvent) => {
-      if (!event.repeat) this.loadSoloStage({ seed: randomSeed(), difficulty: this.stage.difficulty })
+      if (!event.repeat) {
+        const seed = randomSeed()
+        this.loadSoloStage(archetype ? { seed, difficulty: this.stage.difficulty, archetype } : { seed, difficulty: this.stage.difficulty })
+      }
     }
     this.input.keyboard!.on('keydown-R', onR)
     return [() => this.input.keyboard?.off('keydown-R', onR)]
@@ -248,7 +254,7 @@ export class MainScene extends Phaser.Scene {
       this.playerManager.freezeRemotes(false)
       for (const player of this.playerManager.allPresent()) this.roundFX.reform(player.visuals)
       if (choice.kind === 'race' && view.round && this.conn) {
-        const stage = this.buildStage(generateStage(choice.seed, choice.difficulty, choice.bays))
+        const stage = this.buildStage(generateStage(choice.seed, choice.difficulty, choice.bays, choice.archetype))
         this.startRound(this.conn, stage, view.round)
       } else {
         this.startSandbox(this.buildStage(lobbyRoom()), view)
@@ -313,13 +319,17 @@ export class MainScene extends Phaser.Scene {
 
   /** Builds (or rebuilds) the stage for a seed (one start bay) and starts a solo round on it. */
   private loadSoloStage(params: StageParams) {
-    const stage = this.buildStage(generateStage(params.seed, params.difficulty, 1))
+    const stage = this.buildStage(generateStage(params.seed, params.difficulty, 1, stageArchetype(params)))
     const slot = stage.startSlots[0]
     this.raceDirector.startSolo(stage.finish, slot)
     this.cameras.main.centerOn(slot.x, slot.y)
 
     // Keep the URL pointing at this stage so it can be shared or reloaded
-    const search = withStageParams(window.location.search, { seed: stage.seed, difficulty: stage.difficulty })
+    const search = withStageParams(window.location.search, {
+      seed: stage.seed,
+      difficulty: stage.difficulty,
+      ...(params.archetype ? { archetype: params.archetype } : {}),
+    })
     window.history.replaceState(window.history.state, '', `${window.location.pathname}${search}${window.location.hash}`)
   }
 

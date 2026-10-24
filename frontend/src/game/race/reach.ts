@@ -1,4 +1,4 @@
-import { CellGrid, cellAt, OPEN, PAD } from './grid'
+import { CellGrid, cellAt, OPEN, PAD, SOLID } from './grid'
 import { CLIMB_BUDGET, GAP_BUDGET } from './tuning'
 
 /**
@@ -27,11 +27,20 @@ const opened = (g: CellGrid, col: number, row: number) => cellAt(g, col, row) ==
 export const touchesSurface = (g: CellGrid, col: number, row: number): boolean =>
   !opened(g, col - 1, row) || !opened(g, col + 1, row) || !opened(g, col, row - 1) || !opened(g, col, row + 1)
 
-/**
- * Best remaining energy for every cell reachable from `starts` (cell indices); -1 where unreached.
- * Works on a copy of the grid with a one-cell solid border, so neighbours need no bounds checks.
- */
-export const reachFrom = (g: CellGrid, starts: ReadonlyArray<number>, opts: ReachOptions): Int32Array => {
+/** A grid prepared for reach runs: bordered open/pad/surface maps, built once per grid. */
+interface Prepared {
+  g: CellGrid
+  W: number
+  H: number
+  open: Uint8Array
+  padBelow: Uint8Array
+  touches: Uint8Array
+  seaFromK: number
+  opts: ReachOptions
+}
+
+/** The bordered maps every run on this grid shares (a one-cell solid border: no bounds checks). */
+const prepare = (g: CellGrid, opts: ReachOptions): Prepared => {
   const W = g.cols + 2
   const H = g.rows + 2
   const open = new Uint8Array(W * H)
@@ -49,8 +58,11 @@ export const reachFrom = (g: CellGrid, starts: ReadonlyArray<number>, opts: Reac
     if (open[k] && (!open[k - 1] || !open[k + 1] || !open[k - W] || !open[k + W])) touches[k] = 1
   }
   // Rows at or below the sea surface (row 0) are in the sea
-  const seaFromK = (1 - g.row0) * W
+  return { g, W, H, open, padBelow, touches, seaFromK: (1 - g.row0) * W, opts }
+}
 
+const run = (p: Prepared, starts: ReadonlyArray<number>): Int32Array => {
+  const { g, W, H, open, padBelow, touches, seaFromK, opts } = p
   const n = W * H
   const best = new Int32Array(n).fill(-1)
   const upCost = GAP_BUDGET * opts.cellSize
@@ -96,6 +108,23 @@ export const reachFrom = (g: CellGrid, starts: ReadonlyArray<number>, opts: Reac
   return out
 }
 
+/** Best remaining energy for every cell reachable from `starts` (cell indices); -1 where unreached. */
+export const reachFrom = (g: CellGrid, starts: ReadonlyArray<number>, opts: ReachOptions): Int32Array =>
+  run(prepare(g, opts), starts)
+
+/** A copy of the grid with the cells of `rects` (cells) turned to rock: one fork branch shut off. */
+export const solidify = (g: CellGrid, rects: ReadonlyArray<{ c0: number; r0: number; c1: number; r1: number }>): CellGrid => {
+  const cells = g.cells.slice()
+  for (const r of rects) {
+    for (let row = Math.max(r.r0, g.row0); row < Math.min(r.r1, g.row0 + g.rows); row++) {
+      for (let col = Math.max(r.c0, g.col0); col < Math.min(r.c1, g.col0 + g.cols); col++) {
+        cells[(row - g.row0) * g.cols + (col - g.col0)] = SOLID
+      }
+    }
+  }
+  return { ...g, cells }
+}
+
 export interface StageReach {
   /** Some finish cell is reachable from every start (every bay). */
   startToFinish: boolean
@@ -122,8 +151,9 @@ export const checkGrid = (g: CellGrid, targets: ReachTargets, opts: ReachOptions
   const seaFloorRow = g.row0 + g.rows - 1
   let seaReachableFromStart = false
   const stuckStarts: Array<number> = []
+  const prepared = prepare(g, opts)
   targets.starts.forEach((start, index) => {
-    const fromStart = reachFrom(g, [start], opts)
+    const fromStart = run(prepared, [start])
     if (!targets.finish.some((i) => fromStart[i] >= 0)) stuckStarts.push(index)
     for (let col = g.col0; col < g.col0 + g.cols && !seaReachableFromStart; col++) {
       for (let row = 0; row <= seaFloorRow; row++) {
@@ -131,7 +161,7 @@ export const checkGrid = (g: CellGrid, targets: ReachTargets, opts: ReachOptions
       }
     }
   })
-  const fromSea = reachFrom(g, [(seaFloorRow - g.row0) * g.cols], opts)
+  const fromSea = run(prepared, [(seaFloorRow - g.row0) * g.cols])
   return {
     startToFinish: targets.starts.length > 0 && stuckStarts.length === 0,
     stuckStarts,

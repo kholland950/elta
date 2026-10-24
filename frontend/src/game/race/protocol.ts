@@ -5,6 +5,8 @@ import type { PlayerActionMessage } from '../fx/actions'
  * docs/plans/orb-racer-slice2-contract.md §1. Times are server epoch ms.
  */
 
+import type { Archetype } from './archetype'
+
 export type { PlayerActionMessage }
 
 export interface PlayerMoveMessage {
@@ -46,6 +48,7 @@ export interface RoundStartMessage {
   round: number
   seed: number
   difficulty: number
+  archetype: Archetype
   startOrder: string[]
   exploreAt: number
   snapAt: number

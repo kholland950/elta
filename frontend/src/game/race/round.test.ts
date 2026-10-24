@@ -34,7 +34,7 @@ describe('roundPhaseAt', () => {
 })
 
 describe('finishCrossing', () => {
-  const gate = { x: 1000, top: -400, bottom: 0 }
+  const gate = { x: 1000, top: -400, bottom: 0, right: 1600 }
   const stepMs = 10
 
   it('interpolates where on the step the line was crossed', () => {
@@ -57,6 +57,14 @@ describe('finishCrossing', () => {
   it('finishes when entering past the line from below or above', () => {
     expect(finishCrossing({ x: 1100, y: 20 }, { x: 1100, y: -20 }, gate, 10, stepMs)).toBe(95)
     expect(finishCrossing({ x: 1100, y: -420 }, { x: 1100, y: -380 }, gate, 10, stepMs)).toBe(95)
+  })
+
+  it('only counts inside the finish room: right bounds the region', () => {
+    expect(finishCrossing({ x: 1590, y: -50 }, { x: 1600, y: -50 }, gate, 10, stepMs)).toBeUndefined()
+    // Past the far wall (never open on a stage) is outside, and coming back in counts at the wall
+    expect(finishCrossing({ x: 1590, y: -50 }, { x: 1610, y: -50 }, gate, 10, stepMs)).toBeUndefined()
+    expect(finishCrossing({ x: 1620, y: -50 }, { x: 1580, y: -50 }, gate, 10, stepMs)).toBe(95)
+    expect(finishCrossing({ x: 1700, y: 20 }, { x: 1700, y: -20 }, gate, 10, stepMs)).toBeUndefined()
   })
 
   it('uses the later boundary when crossing both at once', () => {

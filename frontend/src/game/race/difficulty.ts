@@ -20,7 +20,7 @@ export interface Knobs {
   riseMax: number
   /** Height of the stall chamber's tunnel mouth. */
   mouthRows: number
-  weights: { run: number; shaftUp: number; shaftDown: number; stallChamber: number }
+  weights: { run: number; shaftUp: number; shaftDown: number; stallChamber: number; switchback: number; chimney: number; chamber: number; fork: number }
 }
 
 export const clampDifficulty = (d: number): number => {
@@ -52,6 +52,11 @@ export const difficultyKnobs = (difficulty: number): Knobs => {
       shaftUp: ramp(2, 3, d),
       shaftDown: 2,
       stallChamber: ramp(1, 3, d),
+      switchback: ramp(1, 2, d),
+      chimney: 2,
+      chamber: 1,
+      // Forks come only from agenda beats (exact counts per archetype)
+      fork: 0,
     },
   }
 }

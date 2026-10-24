@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { archetypeForSeed } from './archetype'
 import {
   canVoteSkip,
   emptyMatch,
@@ -57,6 +58,7 @@ const roundStart = (round: number, seed = 42): RoundStartMessage => ({
   round,
   seed,
   difficulty: 4 + round - 1,
+  archetype: 'tower',
   startOrder: ['b', 'a', 'c'],
   exploreAt: 1000,
   snapAt: 16000,
@@ -83,7 +85,7 @@ describe('reduceMatch', () => {
     view = reduceMatch(view, { event: 'roomState', data: roomState('match', ['a', 'b']) })
     expect(stageFor(view).key).toBe('lobby')
     view = reduceMatch(view, { event: 'roundStart', data: roundStart(1) })
-    expect(stageFor(view)).toEqual({ key: 'round 1', kind: 'race', seed: 42, difficulty: 4, bays: 3 })
+    expect(stageFor(view)).toEqual({ key: 'round 1', kind: 'race', seed: 42, difficulty: 4, bays: 3, archetype: 'tower' })
   })
 
   it('builds one start bay per player in startOrder, clamped to 1–8', () => {
@@ -96,6 +98,23 @@ describe('reduceMatch', () => {
     expect(bays(['c', 'a', 'b'])).toBe(3)
     expect(bays([])).toBe(1)
     expect(bays('abcdefghij'.split(''))).toBe(8)
+  })
+
+  it("builds the server's archetype, falling back to the seed's when it is missing or unknown", () => {
+    const base = reduceMatch(joinedAs('a'), { event: 'roomState', data: roomState('match', ['a']) })
+    const archetypeOf = (extra: Record<string, unknown>, seed = 42) => {
+      // A server from before the field (or a stale message) sends none
+      const { archetype: _sent, ...withoutArchetype } = roundStart(1, seed)
+      const data = { ...withoutArchetype, ...extra } as RoundStartMessage
+      const choice = stageFor(reduceMatch(base, { event: 'roundStart', data }))
+      return choice.kind === 'race' ? choice.archetype : undefined
+    }
+    expect(archetypeOf({ archetype: 'canyon' })).toBe('canyon')
+    expect(archetypeOf({ archetype: 'tower' }, 7)).toBe('tower')
+    // 42 % 5 = 2 and 7 % 5 = 2: labyrinth; 43 % 5 = 3: speedway
+    expect(archetypeOf({})).toBe('labyrinth')
+    expect(archetypeOf({ archetype: 'volcano' }, 43)).toBe('speedway')
+    expect(archetypeOf({ archetype: 3 })).toBe(archetypeForSeed(42))
   })
 
   it('keeps the round stage through its end and changes it on the next roundStart', () => {

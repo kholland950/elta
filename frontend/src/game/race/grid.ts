@@ -20,6 +20,14 @@ export interface CellRect {
   r1: number
 }
 
+/**
+ * A carved rectangle, optionally tagged with the segment that carved it. Where the owner of a
+ * column's lowest carve changes from one column to the next, the column gets a curtain.
+ */
+export interface Carve extends CellRect {
+  owner?: number
+}
+
 export interface CellGrid {
   col0: number
   row0: number
@@ -35,11 +43,8 @@ export interface GridSpec {
   /** Top row (negative, above the sea). The bottom is always the sea floor. */
   row0: number
   seaRows: number
-  carves: ReadonlyArray<CellRect>
-  /** Columns whose floor is open below: the air under them stays open down to the sea. */
-  pitCols: ReadonlyArray<number>
-  /** Columns that get a solid pillar from the tunnel shell down to the sea surface. */
-  curtainCols: ReadonlyArray<number>
+  /** Open space. A pit onto the sea is a carve that reaches the sea surface. */
+  carves: ReadonlyArray<Carve>
   /** Bounce pad cells (they replace rock). */
   pads: ReadonlyArray<CellRect>
 }
@@ -53,26 +58,39 @@ export const cellAt = (g: CellGrid, col: number, row: number): number => {
 
 /**
  * Builds the grid. Per column: carved cells are open; rock fills everything above the lowest
- * carved cell and one shell row below it (unless the column is a pit); below that is open air
- * down to the sea, except in curtain columns, which stay rock down to the sea surface. A column
- * with no carves is rock down to the sea surface. The sea rows are always open.
+ * carved cell and one shell row below it; below that is open air down to the sea, except in
+ * curtain columns, which stay rock down to the sea surface. A column is a curtain where the owner
+ * of its lowest carve differs from the owner of the previous column's (both owned), so the air
+ * under one segment is walled off from the next. A column with no carves is rock down to the sea
+ * surface. The sea rows are always open; a pit is a carve down to the sea surface.
  */
 export const buildGrid = (spec: GridSpec): CellGrid => {
   const cols = spec.col1 - spec.col0
   const rows = spec.seaRows - spec.row0
   const g: CellGrid = { col0: spec.col0, row0: spec.row0, cols, rows, cells: new Uint8Array(cols * rows) }
   const carved = new Uint8Array(cols * rows)
+  // Per column: the lowest carved row and the owner of the carve there (-1: none or untagged)
+  const lowRow = new Int32Array(cols).fill(spec.row0 - 1)
+  const lowOwner = new Int32Array(cols).fill(-1)
   for (const r of spec.carves) {
-    for (let row = Math.max(r.r0, spec.row0); row < Math.min(r.r1, 0); row++) {
+    const r1 = Math.min(r.r1, 0)
+    for (let row = Math.max(r.r0, spec.row0); row < r1; row++) {
       for (let col = Math.max(r.c0, spec.col0); col < Math.min(r.c1, spec.col1); col++) {
         carved[(row - spec.row0) * cols + (col - spec.col0)] = 1
       }
     }
+    for (let col = Math.max(r.c0, spec.col0); col < Math.min(r.c1, spec.col1); col++) {
+      const ci = col - spec.col0
+      if (r1 - 1 > lowRow[ci] && r1 > Math.max(r.r0, spec.row0)) {
+        lowRow[ci] = r1 - 1
+        lowOwner[ci] = r.owner ?? -1
+      }
+    }
   }
-  const isPit = new Uint8Array(cols)
-  for (const c of spec.pitCols) if (c >= spec.col0 && c < spec.col1) isPit[c - spec.col0] = 1
   const isCurtain = new Uint8Array(cols)
-  for (const c of spec.curtainCols) if (c >= spec.col0 && c < spec.col1) isCurtain[c - spec.col0] = 1
+  for (let ci = 1; ci < cols; ci++) {
+    if (lowOwner[ci] >= 0 && lowOwner[ci - 1] >= 0 && lowOwner[ci] !== lowOwner[ci - 1]) isCurtain[ci] = 1
+  }
 
   for (let ci = 0; ci < cols; ci++) {
     let lowest = -1
@@ -83,7 +101,7 @@ export const buildGrid = (spec: GridSpec): CellGrid => {
       if (row >= 0) state = OPEN
       else if (carved[ri * cols + ci]) state = OPEN
       else if (lowest < 0 || ri < lowest) state = SOLID
-      else if (ri === lowest + 1 && !isPit[ci]) state = SOLID
+      else if (ri === lowest + 1) state = SOLID
       else state = isCurtain[ci] ? SOLID : OPEN
       g.cells[ri * cols + ci] = state
     }
