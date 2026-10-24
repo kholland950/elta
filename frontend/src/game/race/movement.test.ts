@@ -8,6 +8,7 @@ import {
   PilotState,
   recharge,
   seaDrag,
+  isResting,
   stepPilot,
 } from './movement'
 import {
@@ -152,6 +153,23 @@ describe('BumpCooldowns', () => {
     expect(cd.tryBump('c', 1100)).toBe(true)
     expect(cd.tryBump('b', 1199)).toBe(false)
     expect(cd.tryBump('b', 1200)).toBe(true)
+  })
+})
+
+describe('isResting', () => {
+  it('holds the micro-bounce speeds of an orb sitting on ground', () => {
+    // The measured resting loop at 120 Hz swung between -22.4 and +45 px/s
+    for (const vy of [-22.4, -4, 0, 15, 45]) expect(isResting(vy, true)).toBe(true)
+  })
+
+  it('lets real bounces, flaps and bumps through', () => {
+    expect(isResting(-80, true)).toBe(false) // landing from a 10 px drop
+    expect(isResting(-1000, true)).toBe(false) // flap from the ground
+    expect(isResting(-800, true)).toBe(false) // bump
+  })
+
+  it('needs ground underneath', () => {
+    expect(isResting(0, false)).toBe(false) // apex of a jump
   })
 })
 

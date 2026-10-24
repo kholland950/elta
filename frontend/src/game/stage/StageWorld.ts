@@ -65,6 +65,16 @@ export class StageWorld {
     this.colliders.push(this.gateCollider)
   }
 
+  /**
+   * Whether the orb stands on ground it can rest on: rock or a shut gate within a pixel or two
+   * below it. Pads don't count — a resting orb has gravity off and would roll over a pad without
+   * pressing into it, so the pad's collider (the launch) would never fire.
+   */
+  public restsOnGround(body: Phaser.Physics.Arcade.Body): boolean {
+    const under = this.scene.physics.overlapRect(body.center.x - 1, body.bottom, 2, 2, false, true)
+    return under.some((b) => !this.pads.contains(b.gameObject))
+  }
+
   /** Opens or shuts every start-bay gate's barrier. */
   public setGatesOpen(open: boolean) {
     this.gatesOpen = open

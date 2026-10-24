@@ -14,6 +14,7 @@ import {
   PilotState,
   recharge,
   seaDrag,
+  isResting,
   stepPilot,
 } from 'game/race/movement'
 import { BODY, STEP_MS } from 'game/race/tuning'
@@ -77,6 +78,7 @@ export class PlayerManager {
   private hidden: ReadonlySet<string> = new Set()
   /** Y of the energy sea surface; below it the orb is slowed. */
   private seaY = Infinity
+  private restsOnGround: (body: Phaser.Physics.Arcade.Body) => boolean = () => false
 
   constructor(
     scene: MainScene,
@@ -165,6 +167,11 @@ export class PlayerManager {
 
   public setSeaY(seaY: number) {
     this.seaY = seaY
+  }
+
+  /** Where the orb may come to rest (see StageWorld.restsOnGround); with no stage, never. */
+  public setGroundProbe(probe: (body: Phaser.Physics.Arcade.Body) => boolean) {
+    this.restsOnGround = probe
   }
 
   /** Contact with any surface recharges; feedback only fires when something was used up. */
@@ -426,7 +433,11 @@ export class PlayerManager {
     const out = stepPilot(this.pilot, input, { x: body.velocity.x, y: body.velocity.y })
     this.pilot = out.state
     const velocity = body.center.y > this.seaY ? seaDrag(out.velocity) : out.velocity
-    body.setVelocity(velocity.x, velocity.y)
+    // Circle-on-rect contact never settles under gravity at 120 Hz: the orb sinks a little, gets
+    // pushed out, and repeats. Standing still on ground, park it with gravity off instead.
+    const resting = isResting(velocity.y, this.restsOnGround(body))
+    body.setAllowGravity(!resting)
+    body.setVelocity(velocity.x, resting ? 0 : velocity.y)
     body.setAccelerationX(out.accelX)
 
     out.events.forEach((e) => {

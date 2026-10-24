@@ -340,6 +340,8 @@ export class MainScene extends Phaser.Scene {
     this.gateRenderer = new GateRenderer(this, stage.bays, this.quality, false)
     this.sea = new EnergySea(this, stage)
     this.playerManager.setSeaY(stage.seaY)
+    const world = this.stageWorld
+    this.playerManager.setGroundProbe((body) => world.restsOnGround(body))
 
     const sprite = this.playerManager.localSprite
     if (sprite) {

@@ -43,6 +43,15 @@ export const SEA_MAX_VX = 250
 export const SEA_DAMP_Y = 0.985
 
 /**
+ * Upward rebound below this, while resting on a floor, is zeroed so the orb settles. With BODY.bounce
+ * a resting orb otherwise hops forever: each 120 Hz step's gravity (≈17 px/s) rebounds, and the
+ * loop was measured peaking at 41 px/s (2026-10-23, headless, lobby floor). Starting value: it must
+ * stay above that loop and below real landing bounces (a 10 px drop rebounds ≈80 px/s). If resting
+ * orbs still twitch, raise it; if short drops stop bouncing, lower it.
+ */
+export const SETTLE_SPEED = 60
+
+/**
  * Height of a vertical launch at `vy`, integrated exactly as Arcade does at STEP_HZ: gravity and
  * linear drag both oppose a rising body, and position moves by the post-update velocity.
  */
