@@ -8,6 +8,7 @@ import {
   JUMP_VELOCITY,
   SEA_DAMP_Y,
   SEA_MAX_VX,
+  SETTLE_SPEED,
 } from './tuning'
 
 /** One physics step's worth of input. Presses are latched between steps so none are lost. */
@@ -136,6 +137,14 @@ export class BumpCooldowns {
     this.lastBump.delete(otherId)
   }
 }
+
+/**
+ * Standing on ground with next to no vertical speed: the orb should sit still (vertical speed
+ * zeroed, gravity off) rather than micro-bounce. Judge it on the velocity after input, so a flap
+ * or bump from the ground is never mistaken for resting.
+ */
+export const isResting = (vy: number, onGround: boolean): boolean =>
+  onGround && Math.abs(vy) < SETTLE_SPEED
 
 /** Sea drag for one step: horizontal speed is capped and vertical speed damped. */
 export const seaDrag = (vel: Velocity): Velocity => ({
