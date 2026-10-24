@@ -9,14 +9,17 @@ class FakeSocket implements SocketLike {
   onerror: SocketLike['onerror'] = null
   sent: { event: string; data: any }[] = []
   closed = false
+  closeCode: number | undefined
   send(d: string) { this.sent.push(JSON.parse(d)) }
-  close() { this.closed = true; this.readyState = 3 }
+  close(code?: number) { this.closed = true; this.closeCode = code; this.readyState = 3 }
   open() { this.readyState = 1; this.onopen?.() }
   push(event: string, data: unknown) { this.onmessage?.({ data: JSON.stringify({ event, data }) }) }
 }
 
 let sock: FakeSocket
 let urlSeen = ''
+/** The 5 clock pings `joined` starts. */
+const PINGS_AFTER_JOIN = 5
 const make = () =>
   new RoomConnection({
     roomId: 'abc123', name: 'Ann', color: 'Red', url: 'ws://h/ws/game',
@@ -140,5 +143,136 @@ describe('RoomConnection', () => {
     expect(sock.closed).toBe(true)
     vi.advanceTimersByTime(1000)
     expect(sock.sent.filter((m) => m.event === 'clockPing')).toHaveLength(0)
+  })
+
+  describe('reconnecting', () => {
+    const joined = { playerId: 'p1', roomId: 'abc123', serverTime: 1, resumeToken: 'tok' }
+    let made = 0
+    const track = () =>
+      new RoomConnection({
+        roomId: 'abc123', name: 'Ann', color: 'Red', url: 'ws://h/ws/game',
+        socketFactory: () => { made++; return (sock = new FakeSocket()) },
+      })
+    const joinedConn = () => {
+      made = 0
+      const c = track()
+      sock.open()
+      sock.push('joined', joined)
+      return c
+    }
+
+    it('resumes the same seat with the token after a drop', () => {
+      const c = joinedConn()
+      const statuses: string[] = []
+      c.onStatus((s) => statuses.push(s))
+      const first = sock
+      first.onclose?.()
+      expect(c.status).toBe('reconnecting')
+      expect(first.onmessage).toBeNull()
+
+      vi.advanceTimersByTime(250)
+      expect(made).toBe(2)
+      sock.open()
+      expect(sock.sent[0]).toEqual({
+        event: 'joinRoom',
+        data: { roomId: 'abc123', name: 'Ann', color: 'Red', build: 'dev', resumeToken: 'tok' },
+      })
+      sock.push('joined', joined)
+      expect(c.playerId).toBe('p1')
+      expect(statuses).toEqual(['connected', 'reconnecting', 'connected'])
+    })
+
+    it('keeps listeners across a reconnect', () => {
+      const c = joinedConn()
+      const cb = vi.fn()
+      c.on('playerLeft', cb)
+      sock.onclose?.()
+      vi.advanceTimersByTime(250)
+      sock.open()
+      sock.push('joined', joined)
+      sock.push('playerLeft', { playerId: 'x' })
+      expect(cb).toHaveBeenCalledWith({ playerId: 'x' })
+    })
+
+    it('holds control messages until the seat is back and drops moves', () => {
+      const c = joinedConn()
+      sock.onclose?.()
+      c.reportFinish(1, 100)
+      c.sendMove({ x: 1, y: 2, velocityX: 0, velocityY: 0 })
+      vi.advanceTimersByTime(250)
+      sock.open()
+      expect(sock.sent.map((m) => m.event)).toEqual(['joinRoom'])
+      sock.push('joined', joined)
+      expect(sock.sent.map((m) => m.event)).toEqual(['joinRoom', 'finishReport'])
+    })
+
+    it('backs off between attempts and gives up once the seat hold is over', () => {
+      const c = joinedConn()
+      sock.onclose?.()
+      const gaps: number[] = []
+      let elapsed = 0
+      while (c.status === 'reconnecting') {
+        const before = made
+        let waited = 0
+        while (made === before && waited < 10_000) {
+          vi.advanceTimersByTime(50)
+          waited += 50
+        }
+        if (made === before) break
+        gaps.push(waited)
+        elapsed += waited
+        sock.onclose?.()
+      }
+      expect(gaps.slice(0, 5)).toEqual([250, 500, 1000, 2000, 4000])
+      expect(c.status).toBe('lost')
+      expect(elapsed).toBeGreaterThanOrEqual(25_000)
+      expect(elapsed).toBeLessThanOrEqual(35_000)
+      const count = made
+      vi.advanceTimersByTime(60_000)
+      expect(made).toBe(count)
+    })
+
+    it('treats an unanswered heartbeat as a dead link', () => {
+      const c = joinedConn()
+      const first = sock
+      vi.advanceTimersByTime(4_000)
+      expect(first.sent.filter((m) => m.event === 'clockPing').length).toBe(PINGS_AFTER_JOIN + 1)
+      vi.advanceTimersByTime(8_000)
+      expect(first.closed).toBe(true)
+      // Not a normal close, so the server holds the seat
+      expect(first.closeCode).toBe(4000)
+      expect(c.status).toBe('reconnecting')
+    })
+
+    it('a heartbeat answered by any message keeps the link', () => {
+      const c = joinedConn()
+      for (let i = 0; i < 10; i++) {
+        vi.advanceTimersByTime(4_000)
+        sock.push('playerMove', { playerId: 'q', x: 0, y: 0, velocityX: 0, velocityY: 0 })
+      }
+      expect(c.status).toBe('connected')
+      expect(made).toBe(1)
+    })
+
+    it('stops for good when the resume is rejected', () => {
+      const c = joinedConn()
+      sock.onclose?.()
+      vi.advanceTimersByTime(250)
+      sock.open()
+      sock.push('joinRejected', { reason: 'expired' })
+      expect(c.status).toBe('lost')
+      sock.onclose?.()
+      vi.advanceTimersByTime(60_000)
+      expect(made).toBe(2)
+    })
+
+    it('close() is a normal close and never reconnects', () => {
+      const c = joinedConn()
+      const first = sock
+      c.close()
+      expect(first.closeCode).toBe(1000)
+      vi.advanceTimersByTime(60_000)
+      expect(made).toBe(1)
+    })
   })
 })

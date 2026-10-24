@@ -29,11 +29,13 @@ export interface RoomPlayer {
   wins: number
 }
 
-export type JoinRejectedReason = 'inProgress' | 'full' | 'badName' | 'staleBuild'
+/** `expired`: a resume whose seat the server no longer holds. */
+export type JoinRejectedReason = 'inProgress' | 'full' | 'badName' | 'staleBuild' | 'expired'
 export type RoundEndReason = 'finish' | 'timeout' | 'skipped'
 
 export interface ClientMessages {
-  joinRoom: { roomId: string; name: string; color: string; build: string }
+  /** `resumeToken` from an earlier `joined` reattaches to that seat. */
+  joinRoom: { roomId: string; name: string; color: string; build: string; resumeToken?: string }
   clockPing: { t0: number }
   updateSettings: RoomSettings
   startMatch: Record<string, never>
@@ -66,7 +68,7 @@ export interface RoundEndMessage {
 }
 
 export interface ServerMessages {
-  joined: { playerId: string; roomId: string; serverTime: number }
+  joined: { playerId: string; roomId: string; serverTime: number; resumeToken: string }
   joinRejected: { reason: JoinRejectedReason }
   clockPong: { t0: number; serverTime: number }
   roomState: {

@@ -32,10 +32,14 @@ fun main(args: Array<String>): Unit = io.ktor.server.netty.EngineMain.main(args)
 fun Application.module(testing: Boolean = false) = appModule(RoomEnv())
 
 /** Composition root. Tests call this directly to inject short [RoomEnv] timings and a seeded Random. */
-fun Application.appModule(env: RoomEnv, clock: () -> Long = System::currentTimeMillis) {
+fun Application.appModule(
+    env: RoomEnv,
+    clock: () -> Long = System::currentTimeMillis,
+    reconnectGraceMs: Long = 30_000,
+) {
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     monitor.subscribe(ApplicationStopped) { scope.cancel() }
-    val registry = RoomRegistry(scope, clock, env)
+    val registry = RoomRegistry(scope, clock, env, reconnectGraceMs)
 
     install(Mustache) {
         mustacheFactory = DefaultMustacheFactory("templates/mustache")

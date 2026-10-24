@@ -29,7 +29,7 @@ describe('reduceSession', () => {
   })
 
   it('joined sets me', () => {
-    const s = run([{ event: 'joined', data: { playerId: 'a', roomId: 'abc123', serverTime: 1 } }])
+    const s = run([{ event: 'joined', data: { playerId: 'a', roomId: 'abc123', serverTime: 1, resumeToken: 't' } }])
     expect(s.me).toBe('a')
   })
 
@@ -108,7 +108,7 @@ describe('reduceSession', () => {
   })
 
   describe('lobbyReturn', () => {
-    const joined: ServerMessage = { event: 'joined', data: { playerId: 'a', roomId: 'abc123', serverTime: 1 } }
+    const joined: ServerMessage = { event: 'joined', data: { playerId: 'a', roomId: 'abc123', serverTime: 1, resumeToken: 't' } }
     const lr = (returned: string[]): ServerMessage => ({ event: 'lobbyReturn', data: { returned, lobbyAt: 500 } })
 
     it('stores the latest list and derives meReturned', () => {

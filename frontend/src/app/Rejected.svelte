@@ -9,6 +9,7 @@
     full: 'This room is full',
     badName: 'That name or color was not accepted',
     staleBuild: 'The game was updated. Reload the page',
+    expired: 'You were disconnected for too long and lost your place in the match',
   }
 
   $: message = MESSAGES[reason] ?? 'Could not join this room'

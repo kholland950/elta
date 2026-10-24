@@ -27,7 +27,14 @@ data class Envelope(val event: String, val data: JsonElement = JsonObject(emptyM
 sealed interface ClientMessage
 
 @Serializable
-data class JoinRoom(val roomId: String, val name: String, val color: String, val build: String) : ClientMessage
+data class JoinRoom(
+    val roomId: String,
+    val name: String,
+    val color: String,
+    val build: String,
+    /** From an earlier `joined`: reattach to that seat instead of joining as someone new. */
+    val resumeToken: String? = null,
+) : ClientMessage
 
 @Serializable
 data class ClockPing(val t0: JsonElement) : ClientMessage
@@ -73,7 +80,7 @@ fun decodeClient(text: String): ClientMessage? = try {
 // Server -> client
 
 @Serializable
-data class Joined(val playerId: String, val roomId: String, val serverTime: Long)
+data class Joined(val playerId: String, val roomId: String, val serverTime: Long, val resumeToken: String)
 
 @Serializable
 data class JoinRejected(val reason: String)
@@ -141,6 +148,7 @@ fun JoinRejection.wire(): String = when (this) {
     JoinRejection.Full -> "full"
     JoinRejection.BadName -> "badName"
     JoinRejection.StaleBuild -> "staleBuild"
+    JoinRejection.Expired -> "expired"
 }
 
 fun RoomEvent.toFrame(): String = when (this) {
