@@ -118,7 +118,8 @@ describe('the lobby room', () => {
     for (let i = 0; i < all.length; i++) {
       for (let j = i + 1; j < all.length; j++) expect(overlaps(all[i], all[j])).toBe(false)
     }
-    expect(g.cells.filter((c) => c === PAD).length).toBe(2)
+    // The centre pad plus the user's far-left and far-right floor pads (2026-10-23)
+    expect(g.cells.filter((c) => c === PAD).length).toBe(6)
   })
 
   it('is the same room every time', () => {

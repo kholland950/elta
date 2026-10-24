@@ -1,3 +1,4 @@
+import { Archetype, archetypeForSeed, parseArchetype } from './archetype'
 import type { RoomPlayer, RoundEndMessage, RoundStartMessage, ServerMessages } from './protocol'
 import type { RoundPlan } from './round'
 import { clampBays } from './segments'
@@ -85,11 +86,16 @@ export const reduceMatch = (view: MatchView, msg: MatchMessage): MatchView => {
 
 /**
  * The stage to build. `key` changes whenever a different stage must be built. A round's stage has
- * one start bay per player in its `startOrder` (clamped to 1–8), so every client builds the same.
+ * one start bay per player in its `startOrder` (clamped to 1–8) and the server's archetype (or the
+ * seed's, from a server that sends none or an unknown one), so every client builds the same.
  */
 export type StageChoice =
   | { key: 'lobby'; kind: 'lobby' }
-  | { key: string; kind: 'race'; seed: number; difficulty: number; bays: number }
+  | { key: string; kind: 'race'; seed: number; difficulty: number; bays: number; archetype: Archetype }
+
+/** The round's archetype: the server's when it is a legal one, else the seed's. */
+export const roundArchetype = (round: RoundStartMessage): Archetype =>
+  parseArchetype((round as unknown as Record<string, unknown>).archetype) ?? archetypeForSeed(round.seed)
 
 /**
  * Whether I am back in the lobby: the room's phase is lobby, or I am in the latest
@@ -127,6 +133,7 @@ export const stageFor = (view: MatchView): StageChoice =>
         seed: view.round.seed,
         difficulty: view.round.difficulty,
         bays: clampBays(view.round.startOrder.length),
+        archetype: roundArchetype(view.round),
       }
     : { key: 'lobby', kind: 'lobby' }
 

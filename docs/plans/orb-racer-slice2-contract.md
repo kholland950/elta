@@ -137,3 +137,46 @@ These replace "after 5000 ms the phase returns to lobby" in §2.
   - A returned player is moved into the lobby room straight away, the same as at phase `"lobby"`.
   - In the lobby room, show only remote orbs whose players have returned (or everyone once the phase is lobby). Hide the others, along with their moves and actions, until they return.
   - A player who has not returned keeps the match-end view.
+
+## 6. Addendum: route variety and archetypes (2026-10-23)
+
+Design: `docs/plans/route-variety.md`. Everything below adds to the earlier sections and removes nothing. As before, if anything here needs to change, report it rather than changing it.
+
+### Wire (kotlin ⇄ frontend)
+- `roundStart` gains `archetype: "tower" | "descent" | "labyrinth" | "speedway" | "canyon"`. These are the only legal values.
+- **Server picker:** a shuffle-bag. Refill it with all 5 in random order; if the first equals the previously drawn archetype, swap it with a random later one. The bag lives on the Room and persists across matches, so no two consecutive rounds share an archetype, including across a match boundary.
+- **Draw order:** draw the archetype *after* the seed and the `startOrder` shuffle, so existing seeded tests keep their values.
+
+### `frontend/src/game/race/archetype.ts` (phaser owns; everyone imports)
+```ts
+export type Archetype = 'tower' | 'descent' | 'labyrinth' | 'speedway' | 'canyon'
+export const ARCHETYPES: readonly Archetype[]          // exactly that order
+export const archetypeForSeed: (seed: number) => Archetype   // ARCHETYPES[(seed >>> 0) % 5]; solo + fallback
+export const parseArchetype: (s: unknown) => Archetype | undefined
+```
+`protocol.ts` `RoundStartMessage.archetype: Archetype` imports the type from here.
+
+### Generator (phaser owns; gallery consumes)
+- `generateStage(seed: number, difficulty: number, bays: number, archetype: Archetype): RaceStage`
+- `RaceStage.archetype: Archetype`
+- `Port` gains `dir: 'E' | 'W' | 'N' | 'S'`. E and W ports keep `{x, top, bottom}`; N and S ports are `{y, left, right}`.
+- `Segment.fork?: { high: Rect[]; low: Rect[] }` (px)
+- `FinishGate` gains `right: number` (px). Finishing requires `gate.x ≤ x ≤ gate.right`.
+- `stage.grid` is already exposed and unchanged in meaning.
+
+### Shared checks: `frontend/src/game/race/stageChecks.ts` (phaser owns)
+Pure predicates, used by the sweep and shown in the gallery. Each returns `{ ok: boolean; detail: string }`:
+- `checkCeilings(stage)`: runs ≤ 40% of buildable segments, ≤ 2 runs in a row, no type > 2× in a row. Speedway is exempt.
+- `checkGuarantee(stage)`: the guarantee for `stage.archetype`.
+- `stageStats(stage) → { segments, runPct, westSegments, forks, parMs }`
+
+Until the phaser agent lands real predicates, a stub returning `ok: true` is acceptable.
+
+### Gallery (frontend owns)
+- `frontend/src/game/fx/stageThumb.ts` (pure):
+  ```ts
+  stageThumb(stage: RaceStage, pxPerCell: number): { w: number; h: number; rgba: Uint8ClampedArray }
+  ```
+  It rasterises `stage.grid` (rock, open space, pads, sea) and overlays the spine, the finish, the bays, fork branches (high and low in two colours, when present) and W-heading segments (tinted, when ports have `dir`).
+- `frontend/src/app/Gallery.svelte` is mounted from `main.ts` only when `?gallery` is set **and** `__BUILD_ID__ === 'dev'` (or undefined). Params: `?gallery=<baseSeed>&diff=<1..10, default 4>&bays=<1..8, default 4>`. It shows 12 stages with archetype `ARCHETYPES[i % 5]` and seed `base + i`. Each card shows the archetype, seed, difficulty, par, the `stageStats` and the `checkCeilings`/`checkGuarantee` results.
+- The archetype is never shown in the game HUD or the Svelte room UI.

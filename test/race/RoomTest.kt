@@ -144,6 +144,29 @@ class RoomTest {
         assertNotEquals(plan(3).seed, plan(4).seed)
     }
 
+    @Test
+    fun archetypeNeverRepeatsWithinOrAcrossMatches() {
+        val drawn = mutableListOf<Archetype>()
+        var room = started("a", "b", settings = Settings(1, 4))
+        repeat(6) {
+            drawn += room.round().plan.archetype
+            val over = room.winRound("a")
+            assertIs<Phase.MatchOver>(over.phase)
+            val lobby = over.tick((over.phase as Phase.MatchOver).lobbyAt, env).room
+            assertEquals(Phase.Lobby, lobby.phase)
+            room = lobby.startMatch("a", 0, env).room
+        }
+        var multi = started("a", "b", settings = Settings(7, 4))
+        repeat(12) { i ->
+            drawn += multi.round().plan.archetype
+            val results = multi.winRound(if (i % 2 == 0) "a" else "b")
+            multi = results.tick((results.phase as Phase.Results).nextAt, env).room
+        }
+        // the two sequences come from separate rooms, so check each on its own
+        drawn.take(6).zipWithNext().forEach { (x, y) -> assertNotEquals(x, y) }
+        drawn.drop(6).zipWithNext().forEach { (x, y) -> assertNotEquals(x, y) }
+    }
+
     // --- finish reports ---
 
     private fun report(room: Room, who: String, t: Double, now: Long, round: Int = 1) =

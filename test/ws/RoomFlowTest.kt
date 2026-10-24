@@ -96,6 +96,7 @@ class RoomFlowTest {
         val startB = b.until("roundStart")
         assertEquals(startA, startB)
         assertEquals(1, startA.long("round"))
+        assertContains(setOf("tower", "descent", "labyrinth", "speedway", "canyon"), startA["archetype"]!!.jsonPrimitive.content)
         assertEquals(setOf(idA, idB), startA["startOrder"]!!.jsonArray.map { it.jsonPrimitive.content }.toSet())
         val goAt = startA.long("goAt")
         assertEquals(startA.long("exploreAt") + 100, startA.long("snapAt"))
@@ -190,11 +191,14 @@ class RoomFlowTest {
     @Test
     fun returnToLobbyEndsMatchOverWaitEarly() = testApplication {
         boot()
+        // alice must join first so she is host; connecting both at once lets bob's join win the race
         val a = connect("roomret", "alice")
+        a.until("joined"); a.until("roomState")
         val b = connect("roomret", "bob")
-        a.until("joined"); b.until("joined")
+        b.until("joined")
+        a.until("roomState") // bob joined
         a.send("updateSettings", buildJsonObject { put("winsToMatch", 1); put("difficulty", 4) })
-        a.until("roomState"); a.until("roomState"); a.until("roomState")
+        a.until("roomState") // settings applied
         a.send("startMatch")
         val start = a.until("roundStart")
         b.until("roundStart")

@@ -12,7 +12,7 @@ const roomState = (over: Partial<Extract<ServerMessage, { event: 'roomState' }>[
   data: { roomId: 'abc123', hostId: 'a', phase: 'lobby', settings, players, ...over },
 })
 const round: RoundStartMessage = {
-  round: 1, seed: 7, difficulty: 4, startOrder: ['a', 'b'], exploreAt: 1, snapAt: 2, goAt: 3,
+  round: 1, seed: 7, difficulty: 4, archetype: 'tower', startOrder: ['a', 'b'], exploreAt: 1, snapAt: 2, goAt: 3,
 }
 const end: RoundEndMessage = {
   round: 1, winnerId: 'b', reason: 'finish', times: [{ playerId: 'b', raceTimeMs: 1234 }],

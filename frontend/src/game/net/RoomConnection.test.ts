@@ -71,7 +71,7 @@ describe('RoomConnection', () => {
     sock.push('joined', { playerId: 'p1', roomId: 'abc123', serverTime: 1 })
     vi.advanceTimersByTime(1000)
     const before = sock.sent.length
-    sock.push('roundStart', { round: 1, seed: 1, difficulty: 1, startOrder: [], exploreAt: 1, snapAt: 2, goAt: 3 })
+    sock.push('roundStart', { round: 1, seed: 1, difficulty: 1, archetype: 'tower', startOrder: [], exploreAt: 1, snapAt: 2, goAt: 3 })
     expect(sock.sent.length - before).toBe(1)
     expect(sock.sent[sock.sent.length - 1]!.event).toBe('clockPing')
   })

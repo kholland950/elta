@@ -1,3 +1,4 @@
+import type { Archetype } from './archetype'
 import type { CellGrid } from './grid'
 
 /**
@@ -49,12 +50,14 @@ export interface Mover extends Rect {
 
 export type Element = Solid | Bounce | Boost | Hazard | Mover
 
-/** A tunnel mouth where one segment hands over to the next: open rows [top, bottom) at column x. */
-export interface Port {
-  x: number
-  top: number
-  bottom: number
-}
+/**
+ * A tunnel mouth where one segment hands over to the next, crossed heading `dir`: for E and W,
+ * open rows [top, bottom) on the vertical line x; for N and S, open columns [left, right) on the
+ * horizontal line y.
+ */
+export type Port =
+  | { dir: 'E' | 'W'; x: number; top: number; bottom: number }
+  | { dir: 'N' | 'S'; y: number; left: number; right: number }
 
 /** A glowing boundary line between rock and open space. */
 export interface Edge {
@@ -65,7 +68,18 @@ export interface Edge {
   pad: boolean
 }
 
-export type SegmentType = 'start' | 'run' | 'shaftUp' | 'shaftDown' | 'stallChamber' | 'finish' | 'lobby'
+export type SegmentType =
+  | 'start'
+  | 'run'
+  | 'shaftUp'
+  | 'shaftDown'
+  | 'stallChamber'
+  | 'switchback'
+  | 'chimney'
+  | 'chamber'
+  | 'fork'
+  | 'finish'
+  | 'lobby'
 
 export interface Segment {
   type: SegmentType
@@ -85,15 +99,18 @@ export interface Segment {
   parMs: number
   /** Floor openings onto the sea, as column spans in px. */
   pits: Array<{ x0: number; x1: number }>
+  /** Forks only: each branch's open space (the junctions belong to neither). */
+  fork?: { high: Array<Rect>; low: Array<Rect> }
   /** Stall chambers only: the tunnel mouth the pad launch lines up with (orb centres). */
   slot?: { x: number; top: number; bottom: number; apexY: number }
 }
 
-/** The finish: crossing x inside the finish chamber's rows. */
+/** The finish: crossing x inside the finish chamber's rows, short of its far wall `right`. */
 export interface FinishGate {
   x: number
   top: number
   bottom: number
+  right: number
 }
 
 /**
@@ -133,5 +150,5 @@ export interface Stage {
   parMs: number
 }
 
-/** A generated race stage always has a finish. */
-export type RaceStage = Stage & { kind: 'race'; finish: FinishGate }
+/** A generated race stage always has a finish, and the archetype that shaped it (never shown to players). */
+export type RaceStage = Stage & { kind: 'race'; finish: FinishGate; archetype: Archetype }

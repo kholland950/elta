@@ -20,6 +20,7 @@ data class Room(
     val players: List<Player> = emptyList(),
     val phase: Phase = Phase.Lobby,
     val round: Int = 0,
+    val archetypeBag: ArchetypeBag = ArchetypeBag(),
 ) {
     val wakeAt: Long?
         get() = when (val p = phase) {
@@ -175,16 +176,20 @@ data class Room(
         val exploreAt = now + t.exploreLeadMs
         val snapAt = exploreAt + t.exploreMs
         val goAt = snapAt + t.goDelayMs
+        val seed = Match.nextSeed(env.rng)
+        val startOrder = players.map { it.id }.shuffled(env.rng)
+        val (archetype, bag) = archetypeBag.draw(env.rng)
         val plan = RoundPlan(
             round = n,
-            seed = Match.nextSeed(env.rng),
+            seed = seed,
             difficulty = Match.difficultyFor(settings.difficulty, n - 1),
-            startOrder = players.map { it.id }.shuffled(env.rng),
+            startOrder = startOrder,
+            archetype = archetype,
             exploreAt = exploreAt,
             snapAt = snapAt,
             goAt = goAt,
         )
-        val next = copy(round = n, phase = Phase.Round(plan, timeoutAt = goAt + t.roundTimeoutMs))
+        val next = copy(round = n, archetypeBag = bag, phase = Phase.Round(plan, timeoutAt = goAt + t.roundTimeoutMs))
         return next to RoomEvent.RoundStarted(plan)
     }
 

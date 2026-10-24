@@ -5,6 +5,7 @@ data class RoundPlan(
     val seed: Int,
     val difficulty: Int,
     val startOrder: List<String>,
+    val archetype: Archetype,
     val exploreAt: Long,
     val snapAt: Long,
     val goAt: Long,

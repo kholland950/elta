@@ -105,6 +105,7 @@ data class RoundStartDto(
     val seed: Int,
     val difficulty: Int,
     val startOrder: List<String>,
+    val archetype: String,
     val exploreAt: Long,
     val snapAt: Long,
     val goAt: Long,
@@ -157,7 +158,7 @@ fun RoomEvent.toFrame(): String = when (this) {
     is RoomEvent.RoundStarted -> frame(
         "roundStart",
         RoundStartDto(
-            plan.round, plan.seed, plan.difficulty, plan.startOrder,
+            plan.round, plan.seed, plan.difficulty, plan.startOrder, plan.archetype.wire,
             plan.exploreAt, plan.snapAt, plan.goAt,
         ),
     )

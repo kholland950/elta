@@ -17,7 +17,7 @@ import { ORB_RADIUS } from './tuning'
  */
 export const LOBBY_MAP: ReadonlyArray<string> = [
   '########################################################################',
-  '#............................##........................................#',
+  '#......................................................................#',
   '#............................##........................................#',
   '#............................##........................................#',
   '#............................##........................................#',
@@ -34,7 +34,7 @@ export const LOBBY_MAP: ReadonlyArray<string> = [
   '#...##............................######...........................##..#',
   '#...##.............................................................##..#',
   '#...##.........7.....5.....3.....1....2.........4....6.......8.....##..#',
-  '###########################################^^###########################',
+  '##^^#######################################^^########################^^#',
   '########################################################################',
 ]
 
@@ -49,20 +49,32 @@ const px = (c0: number, r0: number, c1: number, r1: number): Rect => ({
 })
 
 /** The lobby map as a cell grid (row 0 of the grid is the sea's first row, as on race stages). */
-export const lobbyGrid = (map: ReadonlyArray<string> = LOBBY_MAP): { grid: CellGrid; spawns: Array<Point> } => {
+export const lobbyGrid = (
+  map: ReadonlyArray<string> = LOBBY_MAP,
+): { grid: CellGrid; spawns: Array<Point> } => {
   const rowsAbove = map.length
   const cols = map[0].length
   const rows = rowsAbove + SEA_ROWS
-  const grid: CellGrid = { col0: 0, row0: -rowsAbove, cols, rows, cells: new Uint8Array(cols * rows) }
+  const grid: CellGrid = {
+    col0: 0,
+    row0: -rowsAbove,
+    cols,
+    rows,
+    cells: new Uint8Array(cols * rows),
+  }
   const spawns: Array<{ index: number; at: Point }> = []
   map.forEach((line, ri) => {
-    if (line.length !== cols) throw new Error(`lobby map row ${ri} is ${line.length} wide, not ${cols}`)
+    if (line.length !== cols)
+      throw new Error(`lobby map row ${ri} is ${line.length} wide, not ${cols}`)
     for (let ci = 0; ci < cols; ci++) {
       const ch = line[ci]
       grid.cells[ri * cols + ci] = ch === '#' ? SOLID : ch === '^' ? PAD : OPEN
       if (ch >= '1' && ch <= '9') {
         const row = ri - rowsAbove
-        spawns.push({ index: Number(ch) - 1, at: { x: ci * CELL + CELL / 2, y: (row + 1) * CELL - ORB_RADIUS - 1 } })
+        spawns.push({
+          index: Number(ch) - 1,
+          at: { x: ci * CELL + CELL / 2, y: (row + 1) * CELL - ORB_RADIUS - 1 },
+        })
       }
     }
   })
@@ -77,8 +89,14 @@ export const lobbyGrid = (map: ReadonlyArray<string> = LOBBY_MAP): { grid: CellG
  */
 export const lobbyRoom = (): Stage => {
   const { grid, spawns } = lobbyGrid()
-  const solids: Array<Solid> = mergeCells(grid, SOLID).map((r) => ({ kind: 'solid', ...px(r.c0, r.r0, r.c1, r.r1) }))
-  const pads: Array<Bounce> = mergeCells(grid, PAD).map((r) => ({ kind: 'bounce', ...px(r.c0, r.r0, r.c1, r.r1) }))
+  const solids: Array<Solid> = mergeCells(grid, SOLID).map((r) => ({
+    kind: 'solid',
+    ...px(r.c0, r.r0, r.c1, r.r1),
+  }))
+  const pads: Array<Bounce> = mergeCells(grid, PAD).map((r) => ({
+    kind: 'bounce',
+    ...px(r.c0, r.r0, r.c1, r.r1),
+  }))
   const edges = boundaryEdges(grid).map((e) => ({
     x0: e.c0 * CELL,
     y0: e.r0 * CELL,
@@ -90,9 +108,24 @@ export const lobbyRoom = (): Stage => {
   const interiors = mergeCells(grid, OPEN)
     .filter((r) => r.r1 <= 0)
     .map((r) => px(r.c0, r.r0, r.c1, r.r1))
-  const bounds = { x: 0, y: grid.row0 * CELL, w: grid.cols * CELL, h: grid.rows * CELL }
-  const room = { x: CELL, y: (grid.row0 + 1) * CELL, w: (grid.cols - 2) * CELL, h: (-grid.row0 - 3) * CELL }
-  const port = { x: room.x, top: room.y, bottom: room.y + room.h }
+  const bounds = {
+    x: 0,
+    y: grid.row0 * CELL,
+    w: grid.cols * CELL,
+    h: grid.rows * CELL,
+  }
+  const room = {
+    x: CELL,
+    y: (grid.row0 + 1) * CELL,
+    w: (grid.cols - 2) * CELL,
+    h: (-grid.row0 - 3) * CELL,
+  }
+  const port = {
+    dir: 'E' as const,
+    x: room.x,
+    top: room.y,
+    bottom: room.y + room.h,
+  }
   return {
     kind: 'lobby',
     seed: 0,

@@ -25,7 +25,7 @@ const fakeSprite = (x: number, y: number) => {
   return { sprite: { body } as unknown as PhysicsSprite, body }
 }
 
-const gate = { x: 1000, top: 0, bottom: 500 }
+const gate = { x: 1000, top: 0, bottom: 500, right: 1600 }
 const slot = { x: 160, y: 400 }
 const plan = { exploreAt: 1000, snapAt: 16000, goAt: 19500 }
 
