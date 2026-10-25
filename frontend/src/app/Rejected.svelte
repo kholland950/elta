@@ -20,7 +20,7 @@
   }
   const back = (event) => {
     event.currentTarget.blur()
-    navigate(reason === 'badName' ? `/joinroom/${id}` : '/')
+    navigate(reason === 'badName' ? `/customize?next=/room/${id}` : '/')
   }
 </script>
 

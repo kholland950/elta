@@ -2,18 +2,10 @@ import Phaser from 'phaser'
 import type { QualityProfile } from 'game/fx/quality'
 import { lighten } from 'game/fx/color'
 import { squashStretch } from 'game/fx/orbMotion'
-import { ensureGlowTexture, GLOW_TEXTURE } from 'game/render/textures'
+import { colorHex } from 'game/profile/palette'
+import { ensureGlowTexture, GLOW_TEXTURE, ORB_TEXTURE, ORB_TINT_MODE } from 'game/render/textures'
 
 export type PhysicsSprite = Phaser.GameObjects.Sprite & { body: Phaser.Physics.Arcade.Body }
-
-export const ORB_COLORS: Record<string, number> = {
-  Blue: 0x3d9bff,
-  Green: 0x3dff8b,
-  Orange: 0xff9a3d,
-  Red: 0xff3d5a,
-  Violet: 0xb06bff,
-  Yellow: 0xffe23d,
-}
 
 const ORB_SCALE = 0.1
 const HALO_SCALE = 0.2
@@ -39,7 +31,10 @@ const VANISH_SWELL = 0.8
 // stop the trail for good once reached
 const trailConfig = (
   maxAliveParticles: number,
+  tint: number,
 ): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig => ({
+  tint,
+  tintMode: ORB_TINT_MODE,
   lifespan: 380,
   blendMode: 'ADD',
   scale: { start: 0.075, end: 0 },
@@ -51,10 +46,10 @@ const trailConfig = (
 // Dash ignition: for a moment the trail lays a white-hot copy of itself on top, same shape and size
 const IGNITE_MS = 140
 const IGNITE_LIGHTEN = 0.7
-const igniteConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
-  ...trailConfig(200),
+const igniteConfig = (tint: number): Phaser.Types.GameObjects.Particles.ParticleEmitterConfig => ({
+  ...trailConfig(200, lighten(tint, IGNITE_LIGHTEN)),
   alpha: { start: 1, end: 0 },
-}
+})
 
 /**
  * Everything drawn for one player. The physics sprite stays the hitbox and camera target but is
@@ -62,8 +57,6 @@ const igniteConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
  * squash/stretch cannot change the body.
  */
 export class PlayerVisuals {
-  /** Texture key of the orb (the player's colour name). */
-  readonly colorKey: string
   /** Neon tint for this player's colour. */
   readonly tint: number
   private scene: Phaser.Scene
@@ -99,7 +92,6 @@ export class PlayerVisuals {
     profile: QualityProfile,
   ) {
     this.scene = scene
-    this.colorKey = color
     this.target = target
     this.maxSpeed = maxSpeed
     this.trailRate = profile.trailRate
@@ -107,20 +99,26 @@ export class PlayerVisuals {
     this.lastY = target.y
     ensureGlowTexture(scene)
 
-    const tint = ORB_COLORS[color] ?? 0xffffff
+    const tint = colorHex(color)
     this.tint = tint
     const depth = isLocal ? 10 : 0
     this.coreScale = CORE_SIZE / scene.textures.get(GLOW_TEXTURE).getSourceImage().width
 
-    this.trail = scene.add.particles(0, 0, color, trailConfig(isLocal ? 160 : 120)).setDepth(depth)
+    this.trail = scene.add
+      .particles(0, 0, ORB_TEXTURE, trailConfig(isLocal ? 160 : 120, tint))
+      .setDepth(depth)
     this.halo = scene.add
-      .image(target.x, target.y, color)
+      .image(target.x, target.y, ORB_TEXTURE)
+      .setTint(tint)
+      .setTintMode(ORB_TINT_MODE)
       .setScale(HALO_SCALE)
       .setAlpha(HALO_ALPHA)
       .setBlendMode(Phaser.BlendModes.ADD)
       .setDepth(depth + 1)
     this.orb = scene.add
-      .image(target.x, target.y, color)
+      .image(target.x, target.y, ORB_TEXTURE)
+      .setTint(tint)
+      .setTintMode(ORB_TINT_MODE)
       .setScale(ORB_SCALE)
       .setDepth(depth + 2)
     this.core = scene.add
@@ -156,8 +154,7 @@ export class PlayerVisuals {
   public ignite() {
     if (!this.ignition) {
       this.ignition = this.scene.add
-        .particles(0, 0, this.colorKey, igniteConfig)
-        .setParticleTint(lighten(this.tint, IGNITE_LIGHTEN))
+        .particles(0, 0, ORB_TEXTURE, igniteConfig(this.tint))
         .setDepth(this.trail.depth)
     }
     this.ignitedUntil = this.scene.time.now + IGNITE_MS

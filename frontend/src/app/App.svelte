@@ -1,7 +1,8 @@
 <script>
   import { Router, Route } from 'svelte-routing'
-  import JoinRoom from './JoinRoom.svelte'
+  import Customize from './Customize.svelte'
   import Main from './Main.svelte'
+  import Redirect from './Redirect.svelte'
   import Room from './Room.svelte'
 </script>
 
@@ -19,6 +20,8 @@
 -->
 <Router>
   <Route path="/"><Main /></Route>
-  <Route path="/joinroom/:id" let:params><JoinRoom id={params.id} /></Route>
+  <Route path="/customize"><Customize /></Route>
+  <!-- Old share links: every player has a profile now, so they go straight in -->
+  <Route path="/joinroom/:id" let:params><Redirect to={`/room/${params.id}`} /></Route>
   <Route path="/room/:id" let:params><Room id={params.id} /></Route>
 </Router>

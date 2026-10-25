@@ -31,7 +31,7 @@ data class Room(
         }
 
     fun join(playerId: String, name: String, color: String, build: String): JoinOutcome {
-        if (!validName(name) || color !in COLORS) return JoinOutcome.Rejected(JoinRejection.BadName)
+        if (!validName(name) || color !in ORB_COLORS) return JoinOutcome.Rejected(JoinRejection.BadName)
         if (this.build != null && this.build != build) return JoinOutcome.Rejected(JoinRejection.StaleBuild)
         if (phase != Phase.Lobby) return JoinOutcome.Rejected(JoinRejection.InProgress)
         if (players.size >= MAX_PLAYERS) return JoinOutcome.Rejected(JoinRejection.Full)
@@ -91,6 +91,15 @@ data class Room(
         val s = Settings(winsToMatch, difficulty)
         if (s == settings) return Step(this)
         val next = copy(settings = s)
+        return Step(next, listOf(RoomEvent.StateChanged(next)))
+    }
+
+    /** Renames or recolors a player; only in the lobby, so no race has to redraw an orb. */
+    fun updateProfile(playerId: String, name: String, color: String): Step {
+        if (phase != Phase.Lobby || !validName(name) || color !in ORB_COLORS) return Step(this)
+        val player = players.find { it.id == playerId } ?: return Step(this)
+        if (player.name == name && player.color == color) return Step(this)
+        val next = copy(players = players.map { if (it.id == playerId) it.copy(name = name, color = color) else it })
         return Step(next, listOf(RoomEvent.StateChanged(next)))
     }
 
@@ -229,7 +238,6 @@ data class Room(
 
     companion object {
         const val MAX_PLAYERS = 8
-        val COLORS = setOf("Blue", "Green", "Orange", "Red", "Violet", "Yellow")
         val WINS_TO_MATCH = setOf(1, 3, 5, 7)
         private val NAME = Regex("^[\\w ]+$")
 

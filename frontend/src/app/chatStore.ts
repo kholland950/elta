@@ -2,7 +2,7 @@ import type { Readable } from 'svelte/store'
 import { appendEntry, type ChatEntry } from '../game/chat/chatLog'
 import { isQuickLineId, QUICK_TEXT } from '../game/chat/quickChat'
 import type { RoomConnection } from '../game/net/RoomConnection'
-import { cssColor } from './playerColors'
+import { colorCss } from '../game/profile/palette'
 
 /**
  * The room's chat lines. Like the room store, it subscribes at once (the connection doesn't
@@ -21,7 +21,7 @@ export const createChatStore = (conn: RoomConnection, now: () => number = () => 
 
   // conn.close() clears listeners, so no explicit unsubscribe is needed
   conn.on('roomState', (s) => {
-    for (const p of s.players) roster.set(p.id, { name: p.name, color: cssColor(p.color) })
+    for (const p of s.players) roster.set(p.id, { name: p.name, color: colorCss(p.color) })
   })
   conn.on('chatMessage', (m) => {
     if (m.quick && !isQuickLineId(m.text)) return

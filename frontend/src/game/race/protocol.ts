@@ -38,6 +38,7 @@ export interface ClientMessages {
   joinRoom: { roomId: string; name: string; color: string; build: string; resumeToken?: string }
   clockPing: { t0: number }
   updateSettings: RoomSettings
+  updateProfile: { name: string; color: string }
   startMatch: Record<string, never>
   voteSkip: { round: number }
   returnToLobby: Record<string, never>

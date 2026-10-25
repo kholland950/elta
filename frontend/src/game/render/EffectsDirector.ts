@@ -9,6 +9,8 @@ import {
   ensureGlowTexture,
   ensureRingTexture,
   GLOW_TEXTURE,
+  ORB_TEXTURE,
+  ORB_TINT_MODE,
   RING_TEXTURE,
 } from 'game/render/textures'
 
@@ -218,7 +220,9 @@ export class EffectsDirector implements FeelSink {
       repeat: this.profile.afterimages - 1,
       callback: () => {
         const ghost = this.scene.add
-          .image(local.x, local.y, local.colorKey)
+          .image(local.x, local.y, ORB_TEXTURE)
+          .setTint(local.tint)
+          .setTintMode(ORB_TINT_MODE)
           .setScale(ORB_SCALE * 1.1)
           .setAlpha(0.6)
           .setDepth(AFTERIMAGE_DEPTH)

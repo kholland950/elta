@@ -353,4 +353,18 @@ class RoomFlowTest {
         assertEquals(0, state["players"]!!.jsonArray.sumOf { it.jsonObject.long("wins") })
         a.session.close(); b.session.close()
     }
+
+    @Test
+    fun updateProfileReachesTheOtherPlayer() = testApplication {
+        boot()
+        val a = connect("roomprof", "alice")
+        a.until("joined"); a.until("roomState")
+        val b = connect("roomprof", "bob")
+        b.until("joined"); b.until("roomState")
+        a.until("roomState") // bob joined
+        b.send("updateProfile", buildJsonObject { put("name", "SwiftOtter"); put("color", "Mint") })
+        val bob = a.until("roomState")["players"]!!.jsonArray.map { it.jsonObject }.single { it.str("name") == "SwiftOtter" }
+        assertEquals("Mint", bob.str("color"))
+        a.session.close(); b.session.close()
+    }
 }
