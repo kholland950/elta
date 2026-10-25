@@ -20,6 +20,10 @@ export interface QualityProfile {
   afterimages: number
   /** Soft glow motes shed behind the orb at the start of a dash. */
   wisps: number
+  /** Faint sparks drifting up off the bounce pads at rest. */
+  padMotes: boolean
+  /** Particle count for the spark fountain off a pad launch. */
+  padBurstCount: number
   shake: boolean
 }
 
@@ -57,6 +61,8 @@ export const qualityProfile = (level: QualityLevel, reducedMotion: boolean): Qua
     puffCount: high ? 10 : 4,
     afterimages: high ? 4 : 2,
     wisps: high ? 55 : 20,
+    padMotes: high,
+    padBurstCount: high ? 24 : 10,
     shake: high && !reducedMotion,
   }
 }

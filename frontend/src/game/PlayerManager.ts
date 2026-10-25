@@ -244,6 +244,12 @@ export class PlayerManager {
     if (restored && this.localPlayer) this.emitLocal('recharge')
   }
 
+  /** The local orb was launched off a pad at (x, y): the orb's x on the pad's top. */
+  public launchedFromPad(x: number, y: number) {
+    const local = this.localPlayer
+    if (local) this.feel.emit({ kind: 'bounce', playerId: local.id, x, y })
+  }
+
   /** Full charge and no pending presses, e.g. when snapped to a start slot. */
   public resetPilot() {
     this.pilot = { ...freshPilot(), facing: this.pilot.facing }

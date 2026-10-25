@@ -12,7 +12,14 @@ export interface PlayerActionMessage {
   otherId?: string
 }
 
-const KINDS: ReadonlyArray<FeelEventKind> = ['dash', 'stall', 'flap', 'recharge', 'collision']
+const KINDS: ReadonlyArray<FeelEventKind> = [
+  'dash',
+  'stall',
+  'flap',
+  'recharge',
+  'bounce',
+  'collision',
+]
 
 export const toActionMessage = (e: FeelEvent): PlayerActionMessage => {
   const { playerId, kind, x, y } = e

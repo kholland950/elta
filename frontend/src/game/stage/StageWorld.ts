@@ -6,6 +6,8 @@ import type { PhysicsSprite } from 'game/render/PlayerVisuals'
 export interface StageContacts {
   /** The orb touched a solid or pad on any side. */
   onSurface(): void
+  /** The orb landed on a pad and was launched: its centre x and the pad's top. */
+  onLaunch(x: number, padTop: number): void
 }
 
 /**
@@ -55,7 +57,10 @@ export class StageWorld {
       physics.add.collider(sprite, this.pads, (_orb, pad) => {
         // Landing on a pad (orb centre above its top) launches; touching its side only recharges
         const padBody = (pad as Phaser.Types.Physics.Arcade.GameObjectWithStaticBody).body
-        if (sprite.body.center.y < padBody.top) sprite.body.setVelocityY(-BOUNCE_PAD_VY)
+        if (sprite.body.center.y < padBody.top) {
+          sprite.body.setVelocityY(-BOUNCE_PAD_VY)
+          contacts.onLaunch(sprite.body.center.x, padBody.top)
+        }
         contacts.onSurface()
       }),
     )

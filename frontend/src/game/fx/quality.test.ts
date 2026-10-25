@@ -65,6 +65,7 @@ describe('qualityProfile', () => {
     expect(p.bloom).toBe(true)
     expect(p.nebula).toBe(true)
     expect(p.shake).toBe(true)
+    expect(p.padMotes).toBe(true)
     expect(p.parallaxLayers).toBeGreaterThan(1)
   })
 
@@ -74,6 +75,9 @@ describe('qualityProfile', () => {
     expect(low.bloom).toBe(false)
     expect(low.shake).toBe(false)
     expect(low.nebula).toBe(false)
+    expect(low.padMotes).toBe(false)
+    expect(low.padBurstCount).toBeLessThan(high.padBurstCount)
+    expect(low.padBurstCount).toBeGreaterThan(0)
     expect(low.parallaxLayers).toBe(1)
     expect(low.trailRate).toBeLessThan(high.trailRate)
     expect(low.burstCount).toBeLessThan(high.burstCount)

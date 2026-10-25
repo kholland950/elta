@@ -5,8 +5,9 @@ export const STAGE_PALETTE = {
   tunnelFill: 0x0d4d66,
   tunnelFillAlpha: 0.32,
   solidEdge: 0x00e5ff,
-  padFill: 0x5a0f5e,
   padEdge: 0xff3df0,
+  /** Near-white hot line along a pad's top edge. */
+  padCore: 0xffd8fb,
   seaFill: 0x0090b0,
   seaFillAlpha: 0.38,
   seaEdge: 0x5ff6ff,

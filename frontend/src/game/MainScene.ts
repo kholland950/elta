@@ -34,6 +34,7 @@ import { ChatBubbles } from 'game/render/ChatBubbles'
 import { EffectsDirector } from 'game/render/EffectsDirector'
 import { EnergySea } from 'game/render/EnergySea'
 import { GateRenderer } from 'game/render/GateRenderer'
+import { PadRenderer } from 'game/render/PadRenderer'
 import { PathRenderer } from 'game/render/PathRenderer'
 import { ReplayCamera } from 'game/render/ReplayCamera'
 import { ReplaySequence } from 'game/render/ReplaySequence'
@@ -85,6 +86,7 @@ export class MainScene extends Phaser.Scene {
   private stageWorld?: StageWorld
   private stageRenderer?: StageRenderer
   private gateRenderer?: GateRenderer
+  private padRenderer?: PadRenderer
   private sea?: EnergySea
   /** Every player's route through the current race, for the round-end replay. */
   private readonly recorder = new PathRecorder()
@@ -442,6 +444,7 @@ export class MainScene extends Phaser.Scene {
     this.stageWorld?.destroy()
     this.stageRenderer?.destroy()
     this.gateRenderer?.destroy()
+    this.padRenderer?.destroy()
     this.sea?.destroy()
     this.background?.destroy()
 
@@ -451,6 +454,8 @@ export class MainScene extends Phaser.Scene {
     this.background = new BackgroundRenderer(this, bounds, this.quality)
     this.stageWorld = new StageWorld(this, stage)
     this.stageRenderer = new StageRenderer(this, stage)
+    this.padRenderer = new PadRenderer(this, stage.pads, this.quality)
+    this.effects.setPadLaunch(this.padRenderer)
     this.gateRenderer = new GateRenderer(this, stage.bays, this.quality, false)
     this.sea = new EnergySea(this, stage)
     this.playerManager.setSeaY(stage.seaY)
@@ -459,7 +464,10 @@ export class MainScene extends Phaser.Scene {
 
     const sprite = this.playerManager.localSprite
     if (sprite) {
-      this.stageWorld.attach(sprite, { onSurface: () => this.playerManager.touchedSurface() })
+      this.stageWorld.attach(sprite, {
+        onSurface: () => this.playerManager.touchedSurface(),
+        onLaunch: (x, padTop) => this.playerManager.launchedFromPad(x, padTop),
+      })
     }
     return stage
   }
@@ -492,6 +500,7 @@ export class MainScene extends Phaser.Scene {
     this.effects.applyQuality(quality)
     this.roundFX.applyQuality(quality)
     this.gateRenderer?.applyQuality(quality)
+    this.padRenderer?.applyQuality(quality)
     this.playerManager.applyQuality(quality)
   }
 
