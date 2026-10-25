@@ -10,6 +10,7 @@
   import Lobby from './Lobby.svelte'
   import RoundResults from './RoundResults.svelte'
   import Rejected from './Rejected.svelte'
+  import OptionsMenu from './OptionsMenu.svelte'
   import { loadQuality, saveQuality } from 'game/fx/quality'
 
   export let id
@@ -17,14 +18,34 @@
   let showScoreboard = false
   let quality = loadQuality(localStorage)
 
-  const setQuality = (level, event) => {
-    // Drop focus so Space (jump) can't re-press the button
-    event.currentTarget.blur()
+  // Only the options menu sets this, and it holds the keyboard, so Space can't re-press it
+  const setQuality = (level) => {
     if (level === quality) return
     quality = level
     saveQuality(localStorage, level)
     events.send('qualityChanged', level)
   }
+
+  let menuOpen = false
+  // The game drops its keys while the menu is up; the race goes on underneath
+  $: events.send('menuOpen', menuOpen)
+
+  const onKeydown = (event) => {
+    // Esc only opens; once open, the menu's own back action closes it
+    if (menuOpen || event.key !== 'Escape' || event.repeat || $session.rejected) return
+    event.preventDefault()
+    menuOpen = true
+  }
+
+  const openMenu = (event) => {
+    event.currentTarget.blur()
+    menuOpen = true
+  }
+
+  const closeMenu = () => (menuOpen = false)
+
+  // Unmounting the room closes the connection cleanly, so the seat is freed straight away
+  const leave = () => navigate('/')
 
   events.add('showScoreboard', (show) => {
     showScoreboard = show
@@ -65,6 +86,8 @@
   $: inResults = $session.phase === 'match' && $session.lastRoundEnd !== null && !meReturned($session) && !$session.rejected
 </script>
 
+<svelte:window on:keydown={onKeydown} />
+
 <main class="menu">
   <div id="scoreboard" class="scoreboard card" hidden={!showScoreboard}>
     <h1>Players</h1>
@@ -77,18 +100,6 @@
         </li>
       {/each}
     </ul>
-    <div class="quality" role="group" aria-label="Graphics quality">
-      <span>Graphics</span>
-      {#each ['high', 'low'] as level}
-        <button
-          class="button"
-          class:button-outline={quality !== level}
-          aria-pressed={quality === level}
-          on:click={(event) => setQuality(level, event)}>
-          {level === 'high' ? 'High' : 'Low'}
-        </button>
-      {/each}
-    </div>
   </div>
 
   {#if conn && inLobby}
@@ -96,6 +107,12 @@
   {/if}
   {#if conn && inResults}
     <RoundResults {conn} session={$session} />
+  {/if}
+  {#if !$session.rejected}
+    <button class="options-button button button-outline" aria-label="Options" on:click={openMenu}>⚙</button>
+  {/if}
+  {#if menuOpen && !$session.rejected}
+    <OptionsMenu {quality} onQuality={setQuality} onLeave={leave} onClose={closeMenu} />
   {/if}
   {#if $session.rejected}
     <Rejected reason={$session.rejected} {id} />
@@ -114,15 +131,14 @@
 </main>
 
 <style>
-  .quality {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 1rem;
-  }
-
-  .quality .button {
-    margin-bottom: 0;
+  .options-button {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    margin: 0;
+    padding: 0 1rem;
+    font-size: 1.6rem;
+    z-index: 10;
   }
 
   .dot {

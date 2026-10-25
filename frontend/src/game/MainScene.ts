@@ -156,8 +156,10 @@ export class MainScene extends Phaser.Scene {
     events.add('qualityChanged', (level: QualityLevel) =>
       this.applyQuality(this.qualityProfile(level)),
     )
+    events.add('menuOpen', (open: boolean) => this.setMenuOpen(open))
     this.events.once(Phaser.Scenes.Events.DESTROY, () => {
       events.remove('qualityChanged')
+      events.remove('menuOpen')
       // The physics plugin can be torn down first when the whole game is destroyed
       this.physics.world?.off(Phaser.Physics.Arcade.Events.WORLD_STEP, onStep)
       this.offEarlyMoves?.()
@@ -165,6 +167,19 @@ export class MainScene extends Phaser.Scene {
       this.tracker?.dispose()
       this.roundFX.destroy()
     })
+  }
+
+  /** The options menu owns the keyboard while it's open; the race carries on without input. */
+  private setMenuOpen(open: boolean) {
+    const keyboard = this.input.keyboard!
+    keyboard.enabled = !open
+    if (open) {
+      // Let Tab and Space reach the menu's buttons
+      keyboard.disableGlobalCapture()
+      this.playerManager.releaseInput()
+    } else {
+      keyboard.enableGlobalCapture()
+    }
   }
 
   /** Solo: the stage from the URL, and R for a new one. */
