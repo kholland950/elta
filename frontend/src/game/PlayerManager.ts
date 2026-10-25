@@ -10,7 +10,6 @@ import {
   BumpCooldowns,
   bumpVelocity,
   freshPilot,
-  InputFrame,
   PilotState,
   recharge,
   seaDrag,
@@ -18,6 +17,8 @@ import {
   stepPilot,
 } from 'game/race/movement'
 import { BODY, STEP_MS } from 'game/race/tuning'
+import { type Bindings, mouseCode } from 'game/input/bindings'
+import { Controls } from 'game/input/controls'
 
 /** Own position updates sent per second. */
 export const MOVE_TPS = 32
@@ -47,16 +48,8 @@ export interface Player {
   placed: boolean
 }
 
-/** Presses seen since the last physics step; each is consumed by exactly one step. */
-interface Latches {
-  flap: boolean
-  dash: boolean
-  stall: boolean
-}
-
-const FLAP_KEYS = new Set(['Space', 'ArrowUp'])
-const DASH_KEYS = new Set(['ShiftLeft', 'ShiftRight'])
-const STALL_KEYS = new Set(['KeyE'])
+const isControl = (target: EventTarget | null) =>
+  target instanceof Element && target.closest('button, a, input, select, textarea, label') !== null
 
 export class PlayerManager {
   private remotePlayers: Array<Player> = []
@@ -66,12 +59,10 @@ export class PlayerManager {
   private feel: FeelSink
   /** Remote orbs, as an Arcade group so one overlap covers players who join later. */
   private remoteGroup: Physics.Arcade.Group
-  private controls: {
-    left: Array<Phaser.Input.Keyboard.Key>
-    right: Array<Phaser.Input.Keyboard.Key>
-    scoreboard: Phaser.Input.Keyboard.Key
-  }
-  private latches: Latches = { flap: false, dash: false, stall: false }
+  private controls: Controls
+  private scoreboardKey: Phaser.Input.Keyboard.Key
+  /** Off while the options menu is open; the keyboard is switched off separately. */
+  private mouseEnabled = true
   private pilot: PilotState = freshPilot()
   private bumps = new BumpCooldowns()
   /** Physics steps run since the scene started; the clock for bump cooldowns. */
@@ -88,6 +79,7 @@ export class PlayerManager {
     scene: MainScene,
     quality: QualityProfile,
     feel: FeelSink,
+    bindings: Bindings,
     private readonly moves?: MoveSink,
   ) {
     this.scene = scene
@@ -96,27 +88,48 @@ export class PlayerManager {
     this.remoteGroup = scene.physics.add.group()
     // Keyboard input is enabled by default in the game config
     const keyboard = this.scene.input.keyboard!
-    this.controls = {
-      left: [
-        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.LEFT),
-        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.A),
-      ],
-      right: [
-        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.RIGHT),
-        keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.D),
-      ],
-      scoreboard: keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB),
-    }
-    // Capture the action keys so they are tracked (and don't scroll the page)
-    keyboard.addKeys('SPACE,UP,SHIFT,E')
-    // Presses are latched from key events, so one shorter than a physics step is never lost and
-    // one is never seen twice when several steps run in a frame
+    this.scoreboardKey = keyboard.addKey(Phaser.Input.Keyboard.KeyCodes.TAB)
+    // Bound keys are read by physical position; stopping their default keeps the page from
+    // scrolling on Space or the arrows
+    this.controls = new Controls(bindings)
     keyboard.on(Phaser.Input.Keyboard.Events.ANY_KEY_DOWN, (event: KeyboardEvent) => {
-      if (event.repeat) return
-      if (FLAP_KEYS.has(event.code)) this.latches.flap = true
-      if (DASH_KEYS.has(event.code)) this.latches.dash = true
-      if (STALL_KEYS.has(event.code)) this.latches.stall = true
+      if (this.controls.keyDown(event.code, event.repeat)) event.preventDefault()
     })
+    keyboard.on(Phaser.Input.Keyboard.Events.ANY_KEY_UP, (event: KeyboardEvent) =>
+      this.controls.keyUp(event.code),
+    )
+    // Mouse buttons are read off the whole window, since the lobby and results cards sit over
+    // the canvas, but a click on a control is the control's. Releases count anywhere.
+    const onMouseDown = (event: MouseEvent) => {
+      if (!this.mouseEnabled || isControl(event.target)) return
+      if (this.controls.keyDown(mouseCode(event.button), false)) event.preventDefault()
+    }
+    const onMouseUp = (event: MouseEvent) => {
+      const code = mouseCode(event.button)
+      // Stops the back and forward buttons navigating away when they are bound
+      if (this.controls.isBound(code)) event.preventDefault()
+      this.controls.keyUp(code)
+    }
+    window.addEventListener('mousedown', onMouseDown)
+    window.addEventListener('mouseup', onMouseUp)
+    // Key-ups are missed while the window is unfocused
+    const onBlur = () => this.controls.releaseAll()
+    this.scene.game.events.on(Phaser.Core.Events.BLUR, onBlur)
+    this.scene.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.scene.game.events.off(Phaser.Core.Events.BLUR, onBlur)
+      window.removeEventListener('mousedown', onMouseDown)
+      window.removeEventListener('mouseup', onMouseUp)
+    })
+  }
+
+  /** The options menu takes the mouse while it's open. */
+  public setMouseEnabled(enabled: boolean) {
+    this.mouseEnabled = enabled
+  }
+
+  /** New key bindings, from the options menu; held keys are let go. */
+  public setBindings(bindings: Bindings) {
+    this.controls.setBindings(bindings)
   }
 
   private addLocalPlayer(player: Player) {
@@ -210,12 +223,12 @@ export class PlayerManager {
   /** Drops held keys and pending presses, e.g. when a menu takes the keyboard. */
   public releaseInput() {
     this.scene.input.keyboard?.resetKeys()
-    this.clearLatches()
+    this.controls.releaseAll()
     this.scene.events.emit('closeScoreboard')
   }
 
   private clearLatches() {
-    this.latches = { flap: false, dash: false, stall: false }
+    this.controls.clearLatches()
   }
 
   private bumped(other: PhysicsSprite) {
@@ -459,14 +472,7 @@ export class PlayerManager {
       return
     }
 
-    const input: InputFrame = {
-      left: this.controls.left.some((key) => key.isDown),
-      right: this.controls.right.some((key) => key.isDown),
-      flapPressed: this.latches.flap,
-      dashPressed: this.latches.dash,
-      stallPressed: this.latches.stall,
-    }
-    this.clearLatches()
+    const input = this.controls.frame()
 
     const out = stepPilot(this.pilot, input, { x: body.velocity.x, y: body.velocity.y })
     this.pilot = out.state
@@ -486,9 +492,9 @@ export class PlayerManager {
 
   /** Per display frame: UI-only keys. */
   public update() {
-    if (Phaser.Input.Keyboard.JustDown(this.controls.scoreboard)) {
+    if (Phaser.Input.Keyboard.JustDown(this.scoreboardKey)) {
       this.scene.events.emit('openScoreboard')
-    } else if (Phaser.Input.Keyboard.JustUp(this.controls.scoreboard)) {
+    } else if (Phaser.Input.Keyboard.JustUp(this.scoreboardKey)) {
       this.scene.events.emit('closeScoreboard')
     }
   }

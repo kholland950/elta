@@ -79,7 +79,7 @@ describe('stepPilot', () => {
   })
 
   it('dashes horizontally and keeps vertical velocity', () => {
-    const out = stepPilot(freshPilot(), press({ left: true, dashPressed: true }), {
+    const out = stepPilot(freshPilot(), press({ left: true, dash: -1 }), {
       x: 100,
       y: 321,
     })
@@ -87,18 +87,24 @@ describe('stepPilot', () => {
     expect(out.events).toEqual([{ kind: 'dash', dir: -1 }])
   })
 
-  it('dashes the last facing way when no direction is held', () => {
-    let state = stepPilot(freshPilot(), press({ left: true }), { x: 0, y: 0 }).state
-    const out = stepPilot(state, press({ dashPressed: true }), { x: 0, y: 0 })
+  it('dashes the asked way and faces it, whatever is held', () => {
+    const out = stepPilot(freshPilot(), press({ dash: -1 }), { x: 0, y: 0 })
     expect(out.velocity.x).toBe(-DASH_SPEED)
-    state = out.state
+    expect(out.state.facing).toBe(-1)
+  })
+
+  it('does not dash without a direction', () => {
+    const out = stepPilot(freshPilot(), press({ right: true }), { x: 50, y: 0 })
+    expect(out.velocity.x).toBe(50)
+    expect(out.events).toEqual([])
+    expect(out.state.dashes).toBe(freshPilot().dashes)
   })
 
   it('allows two dashes per charge', () => {
     let state = freshPilot()
     const fired: Array<number> = []
     for (let i = 0; i < 3; i++) {
-      const out = stepPilot(state, press({ right: true, dashPressed: true }), { x: 0, y: 0 })
+      const out = stepPilot(state, press({ right: true, dash: 1 }), { x: 0, y: 0 })
       fired.push(out.events.length)
       state = out.state
     }
@@ -106,7 +112,7 @@ describe('stepPilot', () => {
   })
 
   it('turns stall plus dash in one step into a level dash', () => {
-    const out = stepPilot(freshPilot(), press({ right: true, stallPressed: true, dashPressed: true }), {
+    const out = stepPilot(freshPilot(), press({ right: true, stallPressed: true, dash: 1 }), {
       x: -400,
       y: 700,
     })

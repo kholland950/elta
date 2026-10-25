@@ -6,6 +6,7 @@ import events from 'app/events'
 import { fromActionMessage, shouldShowRemote } from 'game/fx/actions'
 import type { FeelSink } from 'game/fx/feelEvents'
 import { loadQuality, QualityLevel, QualityProfile, qualityProfile } from 'game/fx/quality'
+import { type Bindings, loadBindings } from 'game/input/bindings'
 import { generateStage } from 'game/race/generateStage'
 import { lobbyRoom } from 'game/race/lobbyRoom'
 import {
@@ -127,7 +128,7 @@ export class MainScene extends Phaser.Scene {
         if (conn.playerId !== null) conn.sendMove(m)
       },
     }
-    this.playerManager = new PlayerManager(this, this.quality, feel, moves)
+    this.playerManager = new PlayerManager(this, this.quality, feel, loadBindings(window.localStorage), moves)
     this.effects.setVisualsLookup((id) => this.playerManager.visualsFor(id), this.localId)
     this.raceDirector = new RaceDirector(
       () => this.playerManager.localSprite,
@@ -157,9 +158,11 @@ export class MainScene extends Phaser.Scene {
       this.applyQuality(this.qualityProfile(level)),
     )
     events.add('menuOpen', (open: boolean) => this.setMenuOpen(open))
+    events.add('bindingsChanged', (bindings: Bindings) => this.playerManager.setBindings(bindings))
     this.events.once(Phaser.Scenes.Events.DESTROY, () => {
       events.remove('qualityChanged')
       events.remove('menuOpen')
+      events.remove('bindingsChanged')
       // The physics plugin can be torn down first when the whole game is destroyed
       this.physics.world?.off(Phaser.Physics.Arcade.Events.WORLD_STEP, onStep)
       this.offEarlyMoves?.()
@@ -173,6 +176,7 @@ export class MainScene extends Phaser.Scene {
   private setMenuOpen(open: boolean) {
     const keyboard = this.input.keyboard!
     keyboard.enabled = !open
+    this.playerManager.setMouseEnabled(!open)
     if (open) {
       // Let Tab and Space reach the menu's buttons
       keyboard.disableGlobalCapture()
