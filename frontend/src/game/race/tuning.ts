@@ -19,6 +19,16 @@ export const BODY = {
 } as const
 
 export const ACCELERATION = 3000
+
+/**
+ * Left stick shaping: tilt below the deadzone reads 0 (pads rest slightly off centre), tilt past
+ * the saturation point reads full, and it is linear in between. Starting values to tune in playtest.
+ */
+export const STICK_DEADZONE = 0.2
+export const STICK_SATURATION = 0.95
+/** Shaped stick past this counts as pressing that direction (for held dash), until below the release. */
+export const STICK_PRESS = 0.5
+export const STICK_RELEASE = 0.35
 export const JUMP_VELOCITY = 1000
 export const DASH_SPEED = 1500
 export const DASHES_ALLOWED = 2

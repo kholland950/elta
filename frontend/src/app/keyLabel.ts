@@ -32,6 +32,26 @@ const NAMES: Record<string, string> = {
   Mouse4: 'Mouse Forward',
 }
 
+/** Standard Gamepad buttons, by index, as printed on an Xbox-style pad. */
+const PAD_NAMES = [
+  'A',
+  'B',
+  'X',
+  'Y',
+  'LB',
+  'RB',
+  'LT',
+  'RT',
+  'View',
+  'Menu',
+  'LS',
+  'RS',
+  'D-pad ↑',
+  'D-pad ↓',
+  'D-pad ←',
+  'D-pad →',
+]
+
 /**
  * A readable name for a key code: the layout's own character where the browser tells us
  * (so KeyQ reads "A" on AZERTY), otherwise a fixed name from the US layout.
@@ -42,6 +62,8 @@ export const keyLabel = (code: string, layout?: LayoutMap): string => {
   if (NAMES[code]) return NAMES[code]
   const mouse = /^Mouse(\d+)$/.exec(code)
   if (mouse) return `Mouse ${Number(mouse[1]) + 1}`
+  const pad = /^Pad(\d+)$/.exec(code)
+  if (pad) return PAD_NAMES[Number(pad[1])] ?? `Pad ${pad[1]}`
   const match = /^(?:Key|Digit)(.)$/.exec(code) ?? /^Numpad(.+)$/.exec(code)
   if (match) return code.startsWith('Numpad') ? `Num ${match[1]}` : match[1]
   return code

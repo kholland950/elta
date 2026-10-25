@@ -1,6 +1,7 @@
 <script>
   import { move } from './menuNav'
   import { menuActionForKey } from './menuKeys'
+  import { usePadMenu } from './padMenu'
   import KeyBindingsMenu from './KeyBindingsMenu.svelte'
 
   export let quality
@@ -31,6 +32,13 @@
   // Browser focus follows the highlight, so screen readers track it too
   $: refs[selection.row][selection.col]?.focus()
 
+  // Shared by the keyboard and the pad
+  const apply = (action) => {
+    if (action === 'confirm') refs[selection.row][selection.col]?.click()
+    else if (action === 'back') onClose()
+    else selection = move(grid, selection, action)
+  }
+
   const onKeydown = (event) => {
     // The bindings screen handles its own keys
     if (view !== 'main') return
@@ -38,10 +46,15 @@
     if (!action) return
     // The menu owns these keys: no native button presses or Tab focus moves on top of ours
     event.preventDefault()
-    if (action === 'confirm') refs[selection.row][selection.col]?.click()
-    else if (action === 'back') onClose()
-    else selection = move(grid, selection, action)
+    apply(action)
   }
+
+  // The bindings screen goes on top of this one for the pad while it's open
+  usePadMenu({
+    action: (action) => {
+      if (view === 'main') apply(action)
+    },
+  })
 </script>
 
 <svelte:window on:keydown={onKeydown} />

@@ -1,5 +1,5 @@
 <script>
-  import { onDestroy } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import { readable } from 'svelte/store'
   import { startGame } from 'game/Game'
   import { RoomConnection } from 'game/net/RoomConnection'
@@ -13,6 +13,7 @@
   import OptionsMenu from './OptionsMenu.svelte'
   import { loadQuality, saveQuality } from 'game/fx/quality'
   import { loadBindings, saveBindings } from 'game/input/bindings'
+  import { gamepadHub } from 'game/input/gamepadHub'
 
   export let id
 
@@ -36,8 +37,23 @@
   }
 
   let menuOpen = false
-  // The game drops its keys while the menu is up; the race goes on underneath
+  // The game drops its keys and pad while the menu is up; the race goes on underneath
   $: events.send('menuOpen', menuOpen)
+  $: gamepadHub.setMenuOpen(menuOpen)
+
+  // Start both opens and closes the menu: unlike Esc, the pad's back button is B
+  const toggleMenu = () => {
+    if (!$session.rejected) menuOpen = !menuOpen
+  }
+
+  onMount(() => {
+    gamepadHub.start()
+    const offStart = gamepadHub.onStart(toggleMenu)
+    return () => {
+      offStart()
+      gamepadHub.stop()
+    }
+  })
 
   const onKeydown = (event) => {
     // Esc only opens; once open, the menu's own back action closes it

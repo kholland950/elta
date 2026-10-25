@@ -58,7 +58,7 @@ describe('stepPilot', () => {
   })
 
   it('stalls to zero velocity while a direction is held', () => {
-    const out = stepPilot(freshPilot(), press({ right: true, stallPressed: true }), {
+    const out = stepPilot(freshPilot(), press({ moveX: 1, stallPressed: true }), {
       x: 900,
       y: -300,
     })
@@ -79,7 +79,7 @@ describe('stepPilot', () => {
   })
 
   it('dashes horizontally and keeps vertical velocity', () => {
-    const out = stepPilot(freshPilot(), press({ left: true, dash: -1 }), {
+    const out = stepPilot(freshPilot(), press({ moveX: -1, dash: -1 }), {
       x: 100,
       y: 321,
     })
@@ -94,7 +94,7 @@ describe('stepPilot', () => {
   })
 
   it('does not dash without a direction', () => {
-    const out = stepPilot(freshPilot(), press({ right: true }), { x: 50, y: 0 })
+    const out = stepPilot(freshPilot(), press({ moveX: 1 }), { x: 50, y: 0 })
     expect(out.velocity.x).toBe(50)
     expect(out.events).toEqual([])
     expect(out.state.dashes).toBe(freshPilot().dashes)
@@ -104,7 +104,7 @@ describe('stepPilot', () => {
     let state = freshPilot()
     const fired: Array<number> = []
     for (let i = 0; i < 3; i++) {
-      const out = stepPilot(state, press({ right: true, dash: 1 }), { x: 0, y: 0 })
+      const out = stepPilot(state, press({ moveX: 1, dash: 1 }), { x: 0, y: 0 })
       fired.push(out.events.length)
       state = out.state
     }
@@ -112,15 +112,23 @@ describe('stepPilot', () => {
   })
 
   it('turns stall plus dash in one step into a level dash', () => {
-    const out = stepPilot(freshPilot(), press({ right: true, stallPressed: true, dash: 1 }), {
+    const out = stepPilot(freshPilot(), press({ moveX: 1, stallPressed: true, dash: 1 }), {
       x: -400,
       y: 700,
     })
     expect(out.velocity).toEqual({ x: DASH_SPEED, y: 0 })
   })
 
-  it('cancels acceleration when both directions are held', () => {
-    expect(stepPilot(freshPilot(), press({ left: true, right: true }), { x: 0, y: 0 }).accelX).toBe(0)
+  it('scales acceleration by how far the input is pushed', () => {
+    expect(stepPilot(freshPilot(), press({ moveX: 0.5 }), { x: 0, y: 0 }).accelX).toBe(1500)
+    expect(stepPilot(freshPilot(), press({ moveX: -1 }), { x: 0, y: 0 }).accelX).toBe(-ACCELERATION)
+    expect(stepPilot(freshPilot(), NO_INPUT, { x: 0, y: 0 }).accelX).toBe(0)
+  })
+
+  it('faces the way the input is pushed, however lightly', () => {
+    const state = stepPilot(freshPilot(), press({ moveX: -0.1 }), { x: 0, y: 0 }).state
+    expect(state.facing).toBe(-1)
+    expect(stepPilot(state, NO_INPUT, { x: 0, y: 0 }).state.facing).toBe(-1)
   })
 })
 
