@@ -12,6 +12,7 @@
   import Rejected from './Rejected.svelte'
   import OptionsMenu from './OptionsMenu.svelte'
   import { loadQuality, saveQuality } from 'game/fx/quality'
+  import { loadBindings, saveBindings } from 'game/input/bindings'
 
   export let id
 
@@ -24,6 +25,14 @@
     quality = level
     saveQuality(localStorage, level)
     events.send('qualityChanged', level)
+  }
+
+  let bindings = loadBindings(localStorage)
+
+  const setBindings = (next) => {
+    bindings = next
+    saveBindings(localStorage, next)
+    events.send('bindingsChanged', next)
   }
 
   let menuOpen = false
@@ -86,7 +95,8 @@
   $: inResults = $session.phase === 'match' && $session.lastRoundEnd !== null && !meReturned($session) && !$session.rejected
 </script>
 
-<svelte:window on:keydown={onKeydown} />
+<!-- Right click can be bound to an action, so the browser's menu never opens over the game -->
+<svelte:window on:keydown={onKeydown} on:contextmenu|preventDefault />
 
 <main class="menu">
   <div id="scoreboard" class="scoreboard card" hidden={!showScoreboard}>
@@ -112,7 +122,13 @@
     <button class="options-button button button-outline" aria-label="Options" on:click={openMenu}>⚙</button>
   {/if}
   {#if menuOpen && !$session.rejected}
-    <OptionsMenu {quality} onQuality={setQuality} onLeave={leave} onClose={closeMenu} />
+    <OptionsMenu
+      {quality}
+      onQuality={setQuality}
+      {bindings}
+      onBindings={setBindings}
+      onLeave={leave}
+      onClose={closeMenu} />
   {/if}
   {#if $session.rejected}
     <Rejected reason={$session.rejected} {id} />

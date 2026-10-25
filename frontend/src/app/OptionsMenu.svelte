@@ -1,9 +1,12 @@
 <script>
   import { move } from './menuNav'
   import { menuActionForKey } from './menuKeys'
+  import KeyBindingsMenu from './KeyBindingsMenu.svelte'
 
   export let quality
   export let onQuality
+  export let bindings
+  export let onBindings
   export let onLeave
   export let onClose
 
@@ -11,6 +14,13 @@
   const grid = [1, 2, 1, 1]
   const refs = grid.map(() => [])
   let selection = { row: 0, col: 0 }
+  let view = 'main'
+  const KEY_BINDINGS = 2
+
+  const closeBindings = () => {
+    view = 'main'
+    selection = { row: KEY_BINDINGS, col: 0 }
+  }
 
   // Hovering selects on pointermove rather than enter, so a resting mouse can't pull the highlight
   // back from the keys
@@ -22,6 +32,8 @@
   $: refs[selection.row][selection.col]?.focus()
 
   const onKeydown = (event) => {
+    // The bindings screen handles its own keys
+    if (view !== 'main') return
     const action = menuActionForKey(event)
     if (!action) return
     // The menu owns these keys: no native button presses or Tab focus moves on top of ours
@@ -34,6 +46,9 @@
 
 <svelte:window on:keydown={onKeydown} />
 
+{#if view === 'bindings'}
+  <KeyBindingsMenu {bindings} onChange={onBindings} onBack={closeBindings} />
+{:else}
 <div class="backdrop">
   <div class="options card" role="dialog" aria-modal="true" aria-labelledby="options-title">
     <h2 id="options-title">Options</h2>
@@ -66,10 +81,10 @@
     <button
       class="button button-outline"
       class:selected={selection.row === 2}
-      aria-disabled="true"
       bind:this={refs[2][0]}
       on:pointermove={() => select(2, 0)}
-      on:focusin={() => select(2, 0)}>Key bindings (coming soon)</button>
+      on:focusin={() => select(2, 0)}
+      on:click={() => (view = 'bindings')}>Key bindings</button>
 
     <button
       class="button button-outline"
@@ -80,6 +95,7 @@
       on:click={onLeave}>Leave room</button>
   </div>
 </div>
+{/if}
 
 <style>
   .backdrop {
@@ -132,11 +148,6 @@
     border-color: #fff;
     color: var(--darkText);
     box-shadow: 0 0 20px rgba(46, 230, 214, 0.8);
-  }
-
-  .options .button[aria-disabled='true'] {
-    opacity: 0.45;
-    cursor: not-allowed;
   }
 
   .quality {

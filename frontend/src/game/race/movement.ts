@@ -16,7 +16,8 @@ export interface InputFrame {
   left: boolean
   right: boolean
   flapPressed: boolean
-  dashPressed: boolean
+  /** Direction of a dash asked for this step, or 0 for none. */
+  dash: 1 | -1 | 0
   stallPressed: boolean
 }
 
@@ -24,7 +25,7 @@ export const NO_INPUT: InputFrame = {
   left: false,
   right: false,
   flapPressed: false,
-  dashPressed: false,
+  dash: 0,
   stallPressed: false,
 }
 
@@ -33,7 +34,7 @@ export interface PilotState {
   flapIndex: number
   dashes: number
   canStall: boolean
-  /** Last held direction; a dash with no direction held goes this way. */
+  /** Last held or dashed direction. */
   facing: 1 | -1
 }
 
@@ -85,10 +86,11 @@ export const stepPilot = (state: PilotState, input: InputFrame, vel: Velocity): 
     events.push({ kind: 'flap' })
   }
 
-  if (input.dashPressed && next.dashes > 0) {
-    velocity.x = DASH_SPEED * next.facing
+  if (input.dash !== 0 && next.dashes > 0) {
+    velocity.x = DASH_SPEED * input.dash
+    next.facing = input.dash
     next.dashes -= 1
-    events.push({ kind: 'dash', dir: next.facing })
+    events.push({ kind: 'dash', dir: input.dash })
   }
 
   return { state: next, velocity, accelX: dir * ACCELERATION, events }
