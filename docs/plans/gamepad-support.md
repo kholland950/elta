@@ -46,7 +46,7 @@ Out of scope: rumble, triggers as an analog stall, remapping the stick, per-pad 
   - `stickX`: deadzone 0.2, saturates at 0.95, linear in between. Constants go in `tuning.ts`.
   - `PadReader.poll(pads, nowMs)` returns `{downs, ups, stickX, menu}` from button edges, with no per-frame allocation.
   - On disconnect, the reader emits ups for every held button.
-  - `reset()` takes what is held now as the baseline, and the stick reads 0 until it returns to centre.
+  - `reset()` takes what is held now as the baseline. The stick doesn't push the menu until it returns to centre, but it steers the game straight away (see Deviations).
   - `MenuRepeater` handles the D-pad and stick (dominant axis, enters at 0.5, releases at 0.35). Repeats come at 400 ms, then every 120 ms. A → confirm, B → back, LB/RB → prev/next.
 
 **Glue:**
@@ -88,6 +88,7 @@ When the plan is approved, copy it to `docs/plans/gamepad-support.md` (that's wh
 - **Smaller binding slots.** Slot buttons shrank from 8rem to 7rem min-width so three columns fit.
 - **`navigator.getGamepads` is wrapped in try/catch.** Browsers leave it out on insecure origins, and a permissions policy can block it. Either way the hub sees no pads.
 - **Extra test file `gamepadHub.test.ts`.** It stubs `window`, `document`, `navigator` and rAF. It covers menu blocking, menu actions, held-over buttons and the stick, Start, a capturing screen taking presses, blur, and sink replacement. To allow this, `GamepadHub` is exported as a class next to the singleton.
+- **Stick steers straight after the menu closes** (user feedback after PR #53): holding the stick while pressing B to close the menu should move the orb at once. The recentre guard now applies only to menu navigation; buttons held across the switch still stay quiet.
 
 ## Tests (Vitest, pure, colocated `*.test.ts`, with a `fakePad({...})` builder)
 - **gamepad.test.ts:**
@@ -130,4 +131,4 @@ When the plan is approved, copy it to `docs/plans/gamepad-support.md` (that's wh
      - Using the wrong device shows the notice.
      - Bindings persist across a reload.
      - An old v1 save keeps its custom keys.
-  4. **Nothing gets stuck:** holding the stick while closing the menu doesn't move the orb until it recentres. Alt-tabbing or unplugging the pad with a button held leaves nothing stuck.
+  4. **Nothing gets stuck:** holding the stick while closing the menu moves the orb straight away; holding it while opening the menu doesn't move the highlight until it recentres. Alt-tabbing or unplugging the pad with a button held leaves nothing stuck.

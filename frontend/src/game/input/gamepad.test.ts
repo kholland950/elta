@@ -123,11 +123,11 @@ describe('PadReader', () => {
     expect(reader.poll([fakePad({ held: { 13: 1 } })]).downs).toEqual([13])
   })
 
-  it('reads the stick as 0 after a reset until it returns to centre', () => {
+  it('keeps a held stick out of the menu after a reset until it returns to centre, but still steers', () => {
     const reader = new PadReader()
     expect(reader.poll([fakePad({ x: 0.95 })]).stickX).toBe(1)
     reader.reset()
-    expect(reader.poll([fakePad({ x: 0.95, y: 0.3 })]).stickX).toBe(0)
+    expect(reader.poll([fakePad({ x: 0.95, y: 0.3 })]).stickX).toBe(1)
     expect(reader.menuPush()).toEqual({ x: 0, y: 0 })
     expect(reader.poll([fakePad({ x: 0.1 })]).stickX).toBe(0)
     expect(reader.poll([fakePad({ x: -0.95, y: 0.5 })]).stickX).toBe(-1)

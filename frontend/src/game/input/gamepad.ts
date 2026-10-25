@@ -90,8 +90,9 @@ export interface PadPoll {
 
 /**
  * Turns `navigator.getGamepads()` snapshots into button edges and stick values. After a reset,
- * buttons already held stay quiet until released and the stick reads 0 until it returns to
- * centre, so input held over from the screen before never acts on the next one.
+ * buttons already held stay quiet until released and the stick doesn't push the menu until it
+ * returns to centre, so presses held over from the screen before never act on the next one. The
+ * stick still steers the game straight away: holding it is steering, not a press.
  */
 export class PadReader {
   private merged: MergedPads = { down: new Array(MAX_BUTTONS).fill(false), x: 0, y: 0 }
@@ -115,7 +116,7 @@ export class PadReader {
       else result.ups.push(i)
     }
     if (this.stickGuard && centred(x, y)) this.stickGuard = false
-    result.stickX = this.stickGuard ? 0 : stickX(x)
+    result.stickX = stickX(x)
     return result
   }
 
@@ -139,7 +140,7 @@ export class PadReader {
     return this.prev[button] && !this.suppressed[button]
   }
 
-  /** Takes what is held now as the baseline: those buttons and the stick stay quiet until let go. */
+  /** Takes what is held now as the baseline: those buttons, and the stick in menus, stay quiet until let go. */
   public reset() {
     for (let i = 0; i < MAX_BUTTONS; i++) this.suppressed[i] = this.prev[i]
     this.stickGuard = !centred(this.merged.x, this.merged.y)

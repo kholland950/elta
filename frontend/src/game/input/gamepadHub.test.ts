@@ -71,7 +71,7 @@ describe('GamepadHub', () => {
     expect(actions).toEqual(['confirm', 'down'])
   })
 
-  it('keeps a button and the stick held from play out of the menu, and the menu ones out of play', () => {
+  it('keeps a button and the stick held from play out of the menu, and menu buttons out of play', () => {
     const { hub, controls } = setup()
     const actions: Array<string> = []
     hub.pushMenu({ action: (a) => actions.push(a) })
@@ -82,12 +82,9 @@ describe('GamepadHub', () => {
     tick(pad([0, 1], 0.9))
     expect(actions).toEqual(['back'])
     hub.setMenuOpen(false)
-    tick(pad([0, 1], 0.9))
-    expect(controls.frame()).toMatchObject({ flapPressed: false, moveX: 0 })
-    // Back at centre the stick steers again
-    tick(pad([], 0))
-    tick(pad([], -0.95))
-    expect(controls.frame().moveX).toBe(-1)
+    tick(pad([0, 1], 0.95))
+    // A and B stay quiet, but the stick held through the menu steers at once
+    expect(controls.frame()).toMatchObject({ flapPressed: false, moveX: 1 })
   })
 
   it('calls Start listeners in play and in the menu', () => {

@@ -33,7 +33,8 @@ const connectedPads = () => {
  * Polls the pads once per display frame and sends their input to the game, or to the open menu.
  * It runs its own loop rather than Phaser's gamepad plugin because the Svelte menus need the pad
  * while Phaser's input is off. Switching between game and menu, or the page losing focus, lets
- * go of everything and makes held buttons and the stick wait to be released before they count.
+ * go of everything and makes held buttons wait to be released before they count. A held stick
+ * steers the game at once but waits for centre before it moves a menu highlight.
  */
 export class GamepadHub {
   private reader = new PadReader()
