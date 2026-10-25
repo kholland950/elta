@@ -116,9 +116,13 @@ describe('RoomConnection', () => {
     c.voteSkip(2)
     c.updateSettings({ winsToMatch: 5, difficulty: 7 })
     c.startMatch()
+    c.sendChat('gl')
+    c.sendQuickChat('wow')
     expect(sock.sent.map((m) => m.event)).toEqual([
-      'playerMove', 'playerAction', 'finishReport', 'voteSkip', 'updateSettings', 'startMatch',
+      'playerMove', 'playerAction', 'finishReport', 'voteSkip', 'updateSettings', 'startMatch', 'chat', 'quickChat',
     ])
+    expect(sock.sent[6]!.data).toEqual({ text: 'gl' })
+    expect(sock.sent[7]!.data).toEqual({ id: 'wow' })
     expect(sock.sent[0]!.data).toEqual({ playerId: 'p1', x: 1, y: 2, velocityX: 3, velocityY: 4 })
     expect(sock.sent[2]!.data).toEqual({ round: 2, raceTimeMs: 1234.5 })
     expect(sock.sent[5]!.data).toEqual({})
@@ -194,11 +198,12 @@ describe('RoomConnection', () => {
       expect(cb).toHaveBeenCalledWith({ playerId: 'x' })
     })
 
-    it('holds control messages until the seat is back and drops moves', () => {
+    it('holds control messages until the seat is back and drops moves and chat', () => {
       const c = joinedConn()
       sock.onclose?.()
       c.reportFinish(1, 100)
       c.sendMove({ x: 1, y: 2, velocityX: 0, velocityY: 0 })
+      c.sendChat('lost')
       vi.advanceTimersByTime(250)
       sock.open()
       expect(sock.sent.map((m) => m.event)).toEqual(['joinRoom'])

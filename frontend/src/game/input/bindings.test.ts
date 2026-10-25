@@ -72,7 +72,10 @@ describe('bindings', () => {
       [0, 'KeyW', 'bind'],
       [1, 'Mouse2', 'bind'],
       [2, 'Pad2', 'bind'],
-      [2, 'Pad12', 'bind'],
+      [2, 'Pad3', 'bind'],
+      [2, 'Pad12', 'reserved'],
+      [0, 'KeyT', 'reserved'],
+      [0, 'Digit1', 'reserved'],
       [0, 'Escape', 'cancel'],
       [2, 'Escape', 'cancel'],
       [2, 'Pad1', 'cancel'],
@@ -126,6 +129,16 @@ describe('bindings', () => {
       // Three slots was never a version 1 shape
       expect(b.dash).toEqual(DEFAULT_BINDINGS.dash)
       expect(b.left).toEqual(DEFAULT_BINDINGS.left)
+    })
+
+    it('takes the D-pad and the chat keys off a save from before quick chat', () => {
+      const raw = JSON.stringify({
+        version: 2,
+        actions: { left: ['ArrowLeft', 'KeyA', 'Pad14'], jump: ['Digit1', 'KeyT', 'Pad0'] },
+      })
+      const b = parseBindings(raw)
+      expect(b.left).toEqual(['ArrowLeft', 'KeyA', null])
+      expect(b.jump).toEqual([null, null, 'Pad0'])
     })
 
     it('empties slots holding a code from the wrong device', () => {

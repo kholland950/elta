@@ -1,5 +1,8 @@
 package com.kholland.ws
 
+import com.kholland.chat.Chat
+import com.kholland.chat.ChatThrottle
+import com.kholland.chat.ChatVerdict
 import com.kholland.race.JoinOutcome
 import com.kholland.race.JoinRejection
 import com.kholland.race.Phase
@@ -67,6 +70,7 @@ class RoomActor(
     private val commands = Channel<Command>(Channel.UNLIMITED)
     private val seats = LinkedHashMap<String, Seat>()
     private var room = Room(id = roomId)
+    private val chatThrottle = ChatThrottle()
     private var wakeAt: Long? = null
 
     // The latest round frames, replayed to a player who resumes after the round has ended
@@ -216,14 +220,30 @@ class RoomActor(
                         val text = m.from(id)
                         seats.forEach { (other, s) -> if (other != id) s.out?.trySend(text) }
                     }
+                    is ChatSend -> Chat.sanitize(m.text)?.let { chat(id, ChatMessageDto(id, it, quick = false), now) }
+                    is QuickChatSend ->
+                        if (m.id in Chat.QUICK_LINE_IDS) chat(id, ChatMessageDto(id, m.id, quick = true), now)
                     is JoinRoom, is ClockPing -> Unit
                 }
             }
         }
     }
 
+    /** To everyone, the sender included, so all clients see the same order. */
+    private fun chat(id: String, message: ChatMessageDto, now: Long) {
+        when (chatThrottle.check(id, now)) {
+            ChatVerdict.Allowed -> {
+                val text = frame("chatMessage", message)
+                seats.values.forEach { it.out?.trySend(text) }
+            }
+            ChatVerdict.Muted -> seats[id]?.out?.trySend(frame("chatMuted", ChatMutedDto(Chat.MUTE_MS)))
+            ChatVerdict.Dropped -> Unit
+        }
+    }
+
     private fun removeSeat(id: String, seat: Seat, why: String, now: Long) {
         seats.remove(id)
+        chatThrottle.forget(id)
         val phase = describe()
         apply(room.leave(id, now, env))
         log.info("room $roomId: player $id '${seat.name}' $why during $phase (now ${describe()})")

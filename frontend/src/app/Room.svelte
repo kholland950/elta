@@ -8,6 +8,8 @@
   import { navigate } from 'svelte-routing'
   import events from './events'
   import { createRoomStore } from './roomStore'
+  import { createChatStore } from './chatStore'
+  import Chat from './Chat.svelte'
   import Lobby from './Lobby.svelte'
   import RoundResults from './RoundResults.svelte'
   import Rejected from './Rejected.svelte'
@@ -38,9 +40,10 @@
   }
 
   let menuOpen = false
-  // The game drops its keys and pad while the menu is up; the race goes on underneath
-  $: events.send('menuOpen', menuOpen)
-  $: gamepadHub.setMenuOpen(menuOpen)
+  let chatOpen = false
+  // The game drops its keys and pad while the menu or the chat input is up; the race goes on underneath
+  $: events.send('menuOpen', menuOpen || chatOpen)
+  $: gamepadHub.setMenuOpen(menuOpen || chatOpen)
 
   // Start both opens and closes the menu: unlike Esc, the pad's back button is B
   const toggleMenu = () => {
@@ -58,7 +61,7 @@
 
   const onKeydown = (event) => {
     // Esc only opens; once open, the menu's own back action closes it
-    if (menuOpen || event.key !== 'Escape' || event.repeat || $session.rejected) return
+    if (menuOpen || chatOpen || event.key !== 'Escape' || event.repeat || $session.rejected) return
     event.preventDefault()
     menuOpen = true
   }
@@ -82,6 +85,7 @@
   const validName = name?.match(/[\w\d ]+/) && name.length >= 2 && name.length <= 15
   let conn = null
   let session = readable(initialSession(id))
+  let chatLog = readable([])
   let status = 'connecting'
 
   if (!validName || !color) {
@@ -90,6 +94,7 @@
     // Order matters: the connection doesn't replay, so the store and game subscribe right away
     conn = new RoomConnection({ roomId: id, name, color })
     session = createRoomStore(conn)
+    chatLog = createChatStore(conn)
     const game = startGame(conn)
     // conn.close() drops status listeners too
     conn.onStatus((s) => (status = s))
@@ -148,6 +153,9 @@
   {/if}
   {#if conn && inResults}
     <RoundResults {conn} session={$session} />
+  {/if}
+  {#if conn && !$session.rejected}
+    <Chat {conn} log={chatLog} bind:open={chatOpen} blocked={menuOpen} />
   {/if}
   {#if !$session.rejected}
     <button class="options-button button button-outline" aria-label="Options" on:click={openMenu}>⚙</button>

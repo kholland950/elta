@@ -18,6 +18,14 @@ export interface PadMenuHandler {
   action?(action: MenuAction): void
 }
 
+/** In play the D-pad is quick chat, slots 1-4 clockwise from up; the stick steers. */
+const QUICK_CHAT_SLOTS: Readonly<Record<number, number>> = {
+  [PAD.up]: 1,
+  [PAD.right]: 2,
+  [PAD.down]: 3,
+  [PAD.left]: 4,
+}
+
 const NO_PADS: ReadonlyArray<null> = []
 
 /** Empty where the browser has no Gamepad API (insecure origins) or a policy blocks it. */
@@ -40,6 +48,7 @@ export class GamepadHub {
   private reader = new PadReader()
   private repeater = new MenuRepeater()
   private startListeners = new Set<() => void>()
+  private quickChatListeners = new Set<(slot: number) => void>()
   private sink: PadGameSink | null = null
   /** Open menu screens, top last; only the top one hears the pad. */
   private menus: Array<PadMenuHandler> = []
@@ -94,6 +103,12 @@ export class GamepadHub {
   public onStart(listener: () => void): () => void {
     this.startListeners.add(listener)
     return () => this.startListeners.delete(listener)
+  }
+
+  /** A D-pad press in play, as quick-chat slot 1-4. */
+  public onQuickChat(listener: (slot: number) => void): () => void {
+    this.quickChatListeners.add(listener)
+    return () => this.quickChatListeners.delete(listener)
   }
 
   /** While the menu is open the game gets no pad input. */
@@ -151,11 +166,13 @@ export class GamepadHub {
   private toGame(downs: ReadonlyArray<number>, ups: ReadonlyArray<number>, stickX: number) {
     for (const button of downs) {
       if (button === PAD.start) this.startListeners.forEach((listener) => listener())
+      const slot = QUICK_CHAT_SLOTS[button]
+      if (slot) this.quickChatListeners.forEach((listener) => listener(slot))
     }
     const sink = this.sink
     if (!sink) return
-    for (const button of downs) sink.keyDown(padCode(button), false)
-    for (const button of ups) sink.keyUp(padCode(button))
+    for (const button of downs) if (!QUICK_CHAT_SLOTS[button]) sink.keyDown(padCode(button), false)
+    for (const button of ups) if (!QUICK_CHAT_SLOTS[button]) sink.keyUp(padCode(button))
     sink.setStick(stickX)
   }
 }

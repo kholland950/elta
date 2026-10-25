@@ -44,6 +44,8 @@ export interface ClientMessages {
   finishReport: { round: number; raceTimeMs: number }
   playerMove: PlayerMoveMessage
   playerAction: PlayerActionMessage
+  chat: { text: string }
+  quickChat: { id: string }
 }
 
 export interface RoundStartMessage {
@@ -92,6 +94,10 @@ export interface ServerMessages {
   roundEnd: RoundEndMessage
   playerMove: PlayerMoveMessage
   playerAction: PlayerActionMessage
+  /** Sent to everyone, the sender included. For a quick chat `text` is the line id. */
+  chatMessage: { playerId: string; text: string; quick: boolean }
+  /** To the sender only: over the chat limit, so muted for `ms`. */
+  chatMuted: { ms: number }
 }
 
 export type ClientEvent = keyof ClientMessages
