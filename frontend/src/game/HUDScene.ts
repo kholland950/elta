@@ -50,10 +50,11 @@ export class HUDScene extends Phaser.Scene {
     this.countdown = new Countdown(this)
     this.roundStatus = new RoundStatus(this)
     this.stageInfo = this.add
-      .text(10, this.scale.height - 10, '', { font: '14px monospace', color: '#7fb8c8' })
-      .setOrigin(0, 1)
+      .text(this.scale.width - 10, this.scale.height - 10, '', { font: '14px monospace', color: '#7fb8c8' })
+      .setOrigin(1, 1)
       .setDepth(900)
-    this.scale.on('resize', (size: Phaser.Structs.Size) => this.stageInfo.setY(size.height - 10))
+    // Bottom right: the bottom left is the chat's
+    this.scale.on('resize', (size: Phaser.Structs.Size) => this.stageInfo.setPosition(size.width - 10, size.height - 10))
     gameScene.events.on('message', (message: string, timeout: number) =>
       this.addMessage(message, timeout),
     )

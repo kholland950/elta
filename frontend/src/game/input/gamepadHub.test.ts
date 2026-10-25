@@ -98,6 +98,30 @@ describe('GamepadHub', () => {
     expect(start).toHaveBeenCalledTimes(2)
   })
 
+  it('turns D-pad presses in play into quick chat, not game keys', () => {
+    const { hub, controls } = setup()
+    const slots: Array<number> = []
+    hub.onQuickChat((slot) => slots.push(slot))
+    tick(pad([12]))
+    tick(pad([12, 15]))
+    tick(pad([13, 14]))
+    expect(slots).toEqual([1, 2, 3, 4])
+    // Even if a D-pad direction is still bound from somewhere, it doesn't reach the game
+    expect(controls.frame().moveX).toBe(0)
+  })
+
+  it('moves the menu with the D-pad instead of quick chatting while the menu is open', () => {
+    const { hub } = setup()
+    const slots: Array<number> = []
+    const actions: Array<string> = []
+    hub.onQuickChat((slot) => slots.push(slot))
+    hub.pushMenu({ action: (a) => actions.push(a) })
+    hub.setMenuOpen(true)
+    tick(pad([13]))
+    expect(slots).toEqual([])
+    expect(actions).toEqual(['down'])
+  })
+
   it('gives every press to a screen that takes it, Start included', () => {
     const { hub } = setup()
     const start = vi.fn()
@@ -117,15 +141,16 @@ describe('GamepadHub', () => {
 
   it('lets go and ignores the pad while the window is away', () => {
     const { controls } = setup()
-    tick(pad([15]))
+    tick(pad([], 0.95))
     expect(controls.frame().moveX).toBe(1)
     listeners.get('blur')!()
     expect(controls.frame().moveX).toBe(0)
-    tick(pad([15, 0]))
+    tick(pad([0], 0.95))
     expect(controls.frame()).toMatchObject({ moveX: 0, flapPressed: false })
     listeners.get('focus')!()
-    tick(pad([15, 0]))
-    expect(controls.frame()).toMatchObject({ moveX: 0, flapPressed: false })
+    tick(pad([0], 0.95))
+    // A held while away waits for a release; the stick steers again at once
+    expect(controls.frame()).toMatchObject({ moveX: 1, flapPressed: false })
   })
 
   it('unregisters a sink only if no newer one has taken its place', () => {

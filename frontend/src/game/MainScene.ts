@@ -3,10 +3,12 @@ import { BroadcastingFeelSink } from 'game/BroadcastingFeelSink'
 import { PlayerManager } from 'game/PlayerManager'
 import { RaceDirector, RaceView } from 'game/RaceDirector'
 import events from 'app/events'
+import { isQuickLineId, lineForSlot, QUICK_TEXT, quickChatMode, type ShownEnd } from 'game/chat/quickChat'
 import { fromActionMessage, shouldShowRemote } from 'game/fx/actions'
 import type { FeelSink } from 'game/fx/feelEvents'
 import { loadQuality, QualityLevel, QualityProfile, qualityProfile } from 'game/fx/quality'
 import { type Bindings, loadBindings } from 'game/input/bindings'
+import { gamepadHub } from 'game/input/gamepadHub'
 import { generateStage } from 'game/race/generateStage'
 import { lobbyRoom } from 'game/race/lobbyRoom'
 import { PathRecorder } from 'game/race/pathRecorder'
@@ -28,6 +30,7 @@ import { parseStageParams, randomSeed, stageArchetype, StageParams, withStagePar
 import type { RoomConnection } from 'game/net/RoomConnection'
 import { BackgroundRenderer } from 'game/render/BackgroundRenderer'
 import { CameraFX } from 'game/render/CameraFX'
+import { ChatBubbles } from 'game/render/ChatBubbles'
 import { EffectsDirector } from 'game/render/EffectsDirector'
 import { EnergySea } from 'game/render/EnergySea'
 import { GateRenderer } from 'game/render/GateRenderer'
@@ -43,6 +46,9 @@ const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
   visible: false,
   key: 'Game',
 }
+
+/** Quick-chat slots on the number row; the D-pad's come from the gamepad hub. */
+const QUICK_CHAT_KEYS: Readonly<Record<string, number>> = { Digit1: 1, Digit2: 2, Digit3: 3, Digit4: 4 }
 
 /** Local id before the server has assigned one (and always, when playing solo). */
 const PENDING_ID = 'local'
@@ -90,6 +96,9 @@ export class MainScene extends Phaser.Scene {
   private stageKey?: string
   /** The round whose end has been shown. */
   private endShown?: number
+  /** That end while its stage is up; it decides what quick chat can say (see `quickChatMode`). */
+  private shownEnd: ShownEnd | null = null
+  private bubbles: ChatBubbles
   private reportedRound?: number
   private votedRound?: number
   private rosterSeen = false
@@ -172,10 +181,18 @@ export class MainScene extends Phaser.Scene {
     }
     this.physics.world.on(Phaser.Physics.Arcade.Events.WORLD_STEP, onStep)
 
+    // Before connect: its first sync clears the bubbles
+    this.bubbles = new ChatBubbles(this, (id) =>
+      this.playerManager.isHidden(id) ? undefined : this.playerManager.visualsFor(id),
+    )
+
     const offs = conn && this.tracker ? this.connect(conn, this.tracker) : this.startSolo()
 
     // Physics moves sprites in its own post-update, which was registered before this one
-    this.events.on(Phaser.Scenes.Events.POST_UPDATE, () => this.playerManager.updateVisuals())
+    this.events.on(Phaser.Scenes.Events.POST_UPDATE, () => {
+      this.playerManager.updateVisuals()
+      this.bubbles.update(this.time.now)
+    })
 
     events.add('qualityChanged', (level: QualityLevel) =>
       this.applyQuality(this.qualityProfile(level)),
@@ -193,6 +210,7 @@ export class MainScene extends Phaser.Scene {
       this.tracker?.dispose()
       this.roundFX.destroy()
       this.paths.destroy()
+      this.bubbles.clear()
     })
   }
 
@@ -255,6 +273,23 @@ export class MainScene extends Phaser.Scene {
     this.input.keyboard!.on('keydown-V', onV)
     offs.push(() => this.input.keyboard?.off('keydown-V', onV))
 
+    // Phaser's keyboard is off while the chat input or the menu is up, and so is the pad's play mode
+    const onDigit = (event: KeyboardEvent) => {
+      const slot = QUICK_CHAT_KEYS[event.code]
+      if (slot && !event.repeat) this.quickChat(conn, slot)
+    }
+    this.input.keyboard!.on('keydown', onDigit)
+    offs.push(() => this.input.keyboard?.off('keydown', onDigit))
+    offs.push(gamepadHub.onQuickChat((slot) => this.quickChat(conn, slot)))
+    offs.push(
+      conn.on('chatMessage', (m) => {
+        if (!m.quick || !isQuickLineId(m.text)) return
+        if (quickChatMode(this.shownEnd, m.playerId, conn.serverNow())?.bubble) {
+          this.bubbles.show(m.playerId, QUICK_TEXT[m.text], this.time.now)
+        }
+      }),
+    )
+
     tracker.onChange((view) => this.sync(view))
     this.sync(tracker.view)
     // Moves that arrived while loading, now that the remote orbs exist
@@ -267,6 +302,12 @@ export class MainScene extends Phaser.Scene {
     })
     this.earlyMoves = undefined
     return offs
+  }
+
+  /** Sends the line in `slot` if quick chat has one for me right now. */
+  private quickChat(conn: RoomConnection, slot: number) {
+    const line = lineForSlot(quickChatMode(this.shownEnd, this.localId, conn.serverNow()), slot)
+    if (line) conn.sendQuickChat(line)
   }
 
   /**
@@ -296,6 +337,8 @@ export class MainScene extends Phaser.Scene {
     if (choice.key !== this.stageKey) {
       this.stageKey = choice.key
       this.endShown = undefined
+      this.shownEnd = null
+      this.bubbles.clear()
       this.replay.cancel()
       this.roundFX.cancel()
       this.playerManager.freezeRemotes(false)
@@ -313,6 +356,9 @@ export class MainScene extends Phaser.Scene {
     const ended = choice.kind === 'race' ? view.ended : null
     if (ended && this.endShown !== ended.round) {
       this.endShown = ended.round
+      // An older server sends no endedAt: the sequence runs from when the end arrived
+      const endedAt = ended.endedAt ?? this.conn?.serverNow() ?? 0
+      this.shownEnd = { reason: ended.reason, winnerId: ended.winnerId, endedAt, replayMs: ended.replayMs }
       this.raceDirector.end()
       this.playerManager.freezeRemotes(true)
       // Until the next stage: the winner's lap mustn't knock the (invisible) losers about
@@ -323,8 +369,6 @@ export class MainScene extends Phaser.Scene {
       })
       const conn = this.conn
       if (conn && ended.reason !== 'skipped') {
-        // An older server sends no endedAt: the sequence runs from when the end arrived
-        const endedAt = ended.endedAt ?? conn.serverNow()
         const paths = this.recorder.finalize(endedAt, ended.times)
         const { finish } = this.stage
         const finishAt = finish && { x: (finish.x + finish.right) / 2, y: (finish.top + finish.bottom) / 2 }

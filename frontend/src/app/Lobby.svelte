@@ -1,5 +1,6 @@
 <script>
   import { onDestroy } from 'svelte'
+  import { cssColor } from './playerColors'
 
   export let conn
   export let session
@@ -10,14 +11,6 @@
     { label: 'Normal', value: 4 },
     { label: 'Hard', value: 6 },
   ]
-  const COLORS = {
-    Blue: '#3d7bff',
-    Green: '#3dff7b',
-    Orange: '#ff9a3d',
-    Red: '#ff4d4d',
-    Violet: '#a46bff',
-    Yellow: '#ffe83d',
-  }
 
   let copied = false
 
@@ -59,7 +52,7 @@
   <ul class="players">
     {#each session.players as player (player.id)}
       <li>
-        <span class="dot" style="background: {COLORS[player.color] ?? player.color}"></span>
+        <span class="dot" style="background: {cssColor(player.color)}"></span>
         <span class="name">{player.name}</span>
         {#if player.id === session.hostId}<span class="badge">host</span>{/if}
         {#if player.id === session.me}<span class="badge you">you</span>{/if}

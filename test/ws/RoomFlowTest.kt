@@ -155,6 +155,49 @@ class RoomFlowTest {
     }
 
     @Test
+    fun chatReachesEveryoneInTheRoomWithTheSenderStamped() = testApplication {
+        boot()
+        val a = connect("roomchat", "alice")
+        val b = connect("roomchat", "bob")
+        val other = connect("roomzzz", "carol")
+        val idA = a.until("joined").str("playerId")
+        b.until("roomState")
+        while (a.until("roomState").getValue("players").jsonArray.size < 2) Unit
+        other.until("roomState")
+
+        a.send("chat", buildJsonObject { put("text", "  gl hf  "); put("playerId", "spoofed") })
+        for (c in listOf(a, b)) {
+            val m = c.until("chatMessage")
+            assertEquals(idA, m.str("playerId"))
+            assertEquals("gl hf", m.str("text"))
+            assertFalse(m.getValue("quick").jsonPrimitive.boolean)
+        }
+
+        a.send("quickChat", buildJsonObject { put("id", "ez") })
+        val quick = b.until("chatMessage")
+        assertEquals("ez", quick.str("text"))
+        assertTrue(quick.getValue("quick").jsonPrimitive.boolean)
+        a.until("chatMessage")
+
+        a.send("quickChat", buildJsonObject { put("id", "not a line") })
+        a.send("chat", buildJsonObject { put("text", "   ") })
+        b.expectSilence()
+        other.expectSilence()
+        listOf(a, b, other).forEach { it.session.close() }
+    }
+
+    @Test
+    fun chatIsThrottledPerPlayer() = testApplication {
+        boot()
+        val a = connect("roomspam", "alice")
+        a.until("roomState")
+        repeat(7) { a.send("chat", buildJsonObject { put("text", "m$it") }) }
+        repeat(5) { assertEquals("m$it", a.until("chatMessage").str("text")) }
+        a.expectSilence()
+        a.session.close()
+    }
+
+    @Test
     fun rejections() = testApplication {
         boot()
         val a = connect("roomrej", "alice")

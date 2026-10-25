@@ -160,6 +160,15 @@ export class RoomConnection {
     this.send('returnToLobby', {})
   }
 
+  /** Chat isn't queued: a line sent while down is dropped. */
+  sendChat(text: string): void {
+    this.send('chat', { text })
+  }
+
+  sendQuickChat(id: string): void {
+    this.send('quickChat', { id })
+  }
+
   close(): void {
     this.closed = true
     this.stopTimers()

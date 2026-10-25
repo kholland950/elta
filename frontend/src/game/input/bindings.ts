@@ -28,16 +28,18 @@ type Slots = readonly [string | null, string | null, string | null]
 export type Bindings = Readonly<Record<Action, Slots>>
 
 export const DEFAULT_BINDINGS: Bindings = {
-  left: ['ArrowLeft', 'KeyA', 'Pad14'],
-  right: ['ArrowRight', 'KeyD', 'Pad15'],
+  // The stick steers on the pad; the D-pad is quick chat
+  left: ['ArrowLeft', 'KeyA', null],
+  right: ['ArrowRight', 'KeyD', null],
   jump: ['Space', 'ArrowUp', 'Pad0'],
   dash: ['ShiftLeft', 'ShiftRight', 'Pad4'],
   stall: ['KeyE', null, 'Pad5'],
 }
 
 /**
- * Menu keys, the fixed hotkeys (V vote skip, R new stage), OS keys and the pad's menu buttons
- * (B back, Start, Home) can't be bound.
+ * Menu keys, the fixed hotkeys (V vote skip, R new stage, T chat, 1-4 and the D-pad quick chat),
+ * OS keys and the pad's menu buttons (B back, Start, Home) can't be bound. A saved binding on one
+ * of these loads as empty.
  */
 export const RESERVED: ReadonlySet<string> = new Set([
   'Escape',
@@ -46,11 +48,20 @@ export const RESERVED: ReadonlySet<string> = new Set([
   'NumpadEnter',
   'KeyV',
   'KeyR',
+  'KeyT',
+  'Digit1',
+  'Digit2',
+  'Digit3',
+  'Digit4',
   'MetaLeft',
   'MetaRight',
   'ContextMenu',
   'Pad1',
   'Pad9',
+  'Pad12',
+  'Pad13',
+  'Pad14',
+  'Pad15',
   'Pad16',
 ])
 

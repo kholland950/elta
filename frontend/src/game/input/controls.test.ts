@@ -146,15 +146,17 @@ describe('Controls', () => {
       const c = new Controls(DEFAULT_BINDINGS)
       down(c, 'Pad0', 'Pad5')
       expect(c.frame()).toMatchObject({ flapPressed: true, stallPressed: true })
-      down(c, 'Pad15')
-      expect(c.frame().moveX).toBe(1)
-      c.keyUp('Pad15')
-      expect(c.frame().moveX).toBe(0)
     })
 
-    it('dashes on LB held and the D-pad pressed', () => {
+    it('leaves the D-pad unbound: it is quick chat', () => {
       const c = new Controls(DEFAULT_BINDINGS)
-      down(c, 'Pad4', 'Pad14')
+      down(c, 'Pad12', 'Pad13', 'Pad14', 'Pad15')
+      expect(c.frame()).toMatchObject({ moveX: 0, flapPressed: false })
+    })
+
+    it('dashes on LB held and a bound pad direction pressed', () => {
+      const c = new Controls({ ...DEFAULT_BINDINGS, left: ['ArrowLeft', 'KeyA', 'Pad2'] })
+      down(c, 'Pad4', 'Pad2')
       expect(c.frame()).toMatchObject({ dash: -1, moveX: -1 })
     })
 
@@ -219,8 +221,8 @@ describe('Controls', () => {
       expect(c.frame().dash).toBe(0)
     })
 
-    it('lets a held key or D-pad direction override the stick', () => {
-      const c = new Controls(DEFAULT_BINDINGS)
+    it('lets a held key or bound pad direction override the stick', () => {
+      const c = new Controls({ ...DEFAULT_BINDINGS, right: ['ArrowRight', 'KeyD', 'Pad15'] })
       c.setStick(0.3)
       down(c, 'KeyA')
       expect(c.frame().moveX).toBe(-1)

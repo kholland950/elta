@@ -7,7 +7,7 @@ const VOTED_COLOR = '#f4ff6b'
 
 /**
  * Server-round readouts: the explore time left (top centre, where the race timer goes once the
- * countdown starts) and the skip vote (bottom right). Text is only rewritten when it changes.
+ * countdown starts) and the skip vote (bottom left, under the chat). Text is only rewritten when it changes.
  */
 export class RoundStatus {
   private explore: Phaser.GameObjects.Text
@@ -27,21 +27,21 @@ export class RoundStatus {
       .setOrigin(0.5, 0)
       .setDepth(900)
     this.votes = scene.add
-      .text(scene.scale.width - 16, scene.scale.height - 10, '', {
+      .text(10, scene.scale.height - 10, '', {
         font: '16px monospace',
         color: VOTE_COLOR,
         stroke: '#001018',
         strokeThickness: 3,
-        align: 'right',
+        align: 'left',
       })
-      .setOrigin(1, 1)
+      .setOrigin(0, 1)
       .setDepth(900)
     scene.scale.on(Phaser.Scale.Events.RESIZE, this.layout, this)
   }
 
   private layout(size: Phaser.Structs.Size) {
     this.explore.setX(size.width / 2)
-    this.votes.setPosition(size.width - 16, size.height - 10)
+    this.votes.setY(size.height - 10)
   }
 
   public update(hud: HudState) {
