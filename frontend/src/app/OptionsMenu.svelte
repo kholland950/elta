@@ -3,25 +3,42 @@
   import { menuActionForKey } from './menuKeys'
   import { usePadMenu } from './padMenu'
   import KeyBindingsMenu from './KeyBindingsMenu.svelte'
+  import CustomizePanel from './CustomizePanel.svelte'
 
   export let quality
   export let onQuality
   export let bindings
   export let onBindings
+  export let profile
+  export let onProfile
+  /** Looks can only change in the lobby, between matches. */
+  export let canCustomize
   export let onLeave
   export let onClose
 
-  // Resume / High | Low / Key bindings / Leave room
-  const grid = [1, 2, 1, 1]
+  // Resume / High | Low / Customize / Key bindings / Leave room
+  const grid = [1, 2, 1, 1, 1]
   const refs = grid.map(() => [])
   let selection = { row: 0, col: 0 }
   let view = 'main'
-  const KEY_BINDINGS = 2
+  const CUSTOMIZE = 2
+  const KEY_BINDINGS = 3
+  const LEAVE = 4
 
-  const closeBindings = () => {
+  const backTo = (row) => () => {
     view = 'main'
-    selection = { row: KEY_BINDINGS, col: 0 }
+    selection = { row, col: 0 }
   }
+  const closeBindings = backTo(KEY_BINDINGS)
+  const closeCustomize = backTo(CUSTOMIZE)
+
+  const saveProfile = (next) => {
+    onProfile(next)
+    closeCustomize()
+  }
+
+  // A match starting under the screen ends the chance to change looks
+  $: if (view === 'customize' && !canCustomize) closeCustomize()
 
   // Hovering selects on pointermove rather than enter, so a resting mouse can't pull the highlight
   // back from the keys
@@ -61,6 +78,10 @@
 
 {#if view === 'bindings'}
   <KeyBindingsMenu {bindings} onChange={onBindings} onBack={closeBindings} />
+{:else if view === 'customize'}
+  <div class="backdrop">
+    <CustomizePanel {profile} onSave={saveProfile} onBack={closeCustomize} />
+  </div>
 {:else}
 <div class="backdrop">
   <div class="options card" role="dialog" aria-modal="true" aria-labelledby="options-title">
@@ -93,18 +114,30 @@
 
     <button
       class="button button-outline"
-      class:selected={selection.row === 2}
-      bind:this={refs[2][0]}
-      on:pointermove={() => select(2, 0)}
-      on:focusin={() => select(2, 0)}
+      class:selected={selection.row === CUSTOMIZE}
+      aria-disabled={!canCustomize}
+      title={canCustomize ? undefined : 'Only in the lobby'}
+      bind:this={refs[CUSTOMIZE][0]}
+      on:pointermove={() => select(CUSTOMIZE, 0)}
+      on:focusin={() => select(CUSTOMIZE, 0)}
+      on:click={() => canCustomize && (view = 'customize')}>
+      Customize{#if !canCustomize}<span class="note"> · lobby only</span>{/if}
+    </button>
+
+    <button
+      class="button button-outline"
+      class:selected={selection.row === KEY_BINDINGS}
+      bind:this={refs[KEY_BINDINGS][0]}
+      on:pointermove={() => select(KEY_BINDINGS, 0)}
+      on:focusin={() => select(KEY_BINDINGS, 0)}
       on:click={() => (view = 'bindings')}>Key bindings</button>
 
     <button
       class="button button-outline"
-      class:selected={selection.row === 3}
-      bind:this={refs[3][0]}
-      on:pointermove={() => select(3, 0)}
-      on:focusin={() => select(3, 0)}
+      class:selected={selection.row === LEAVE}
+      bind:this={refs[LEAVE][0]}
+      on:pointermove={() => select(LEAVE, 0)}
+      on:focusin={() => select(LEAVE, 0)}
       on:click={onLeave}>Leave room</button>
   </div>
 </div>
@@ -161,6 +194,15 @@
     border-color: #fff;
     color: var(--darkText);
     box-shadow: 0 0 20px rgba(46, 230, 214, 0.8);
+  }
+
+  .button[aria-disabled='true'] {
+    opacity: 0.5;
+  }
+
+  .note {
+    text-transform: none;
+    font-weight: 400;
   }
 
   .quality {

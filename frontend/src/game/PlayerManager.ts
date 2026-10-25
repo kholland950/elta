@@ -6,6 +6,7 @@ import type { FeelSink } from 'game/fx/feelEvents'
 import type { PlayerMoveMessage, RoomPlayer } from 'game/race/protocol'
 import type { Point } from 'game/race/stage'
 import { PhysicsSprite, PlayerVisuals } from 'game/render/PlayerVisuals'
+import { ORB_TEXTURE } from 'game/render/textures'
 import {
   BumpCooldowns,
   bumpVelocity,
@@ -319,15 +320,7 @@ export class PlayerManager {
 
     this.addPhysics(player)
 
-    player.visuals = new PlayerVisuals(
-      this.scene,
-      player.sprite,
-      color,
-      name,
-      isLocal,
-      BODY.maxSpeed,
-      this.quality,
-    )
+    player.visuals = this.createVisuals(player)
 
     if (isLocal) {
       this.addLocalPlayer(player)
@@ -336,11 +329,23 @@ export class PlayerManager {
     }
   }
 
+  private createVisuals(player: Player) {
+    return new PlayerVisuals(
+      this.scene,
+      player.sprite,
+      player.color,
+      player.name,
+      player.isLocal,
+      BODY.maxSpeed,
+      this.quality,
+    )
+  }
+
   private createSprite(player: Player, x: number, y: number) {
     player.sprite = this.scene.add.sprite(
       x !== undefined ? x : playerConfig.startingPosition.x,
       y !== undefined ? y : playerConfig.startingPosition.y,
-      player.color,
+      ORB_TEXTURE,
     ) as any
 
     player.sprite.setScale(playerConfig.scale)
@@ -385,6 +390,22 @@ export class PlayerManager {
       this.resendPosition()
       if (announce) this.scene.events.emit('message', `${p.name} joined`)
     })
+  }
+
+  /**
+   * Redraws any orb, the local one too, whose name or color differs from the room's (someone
+   * customized in the lobby). The body and its place are kept; only the visuals are rebuilt.
+   */
+  public syncLooks(players: ReadonlyArray<RoomPlayer>) {
+    for (const p of players) {
+      const player = p.id === this.localPlayer?.id ? this.localPlayer : this.remotePlayers.find((r) => r.id === p.id)
+      if (!player || (player.name === p.name && player.color === p.color)) continue
+      player.name = p.name
+      player.color = p.color
+      player.visuals.destroy()
+      player.visuals = this.createVisuals(player)
+      player.visuals.setPresence(player.placed ? 1 : 0)
+    }
   }
 
   /** Sends the local position on the next tick even if it has not changed. */

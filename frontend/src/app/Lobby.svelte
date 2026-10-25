@@ -1,6 +1,6 @@
 <script>
   import { onDestroy } from 'svelte'
-  import { cssColor } from './playerColors'
+  import { colorCss } from 'game/profile/palette'
 
   export let conn
   export let session
@@ -24,7 +24,7 @@
   $: waiting = session.phase === 'match'
   $: notReturned = session.players.filter((p) => !session.lobbyReturn?.returned.includes(p.id)).length
   $: waitSeconds = session.lobbyReturn ? Math.max(0, Math.ceil((session.lobbyReturn.lobbyAt - now) / 1000)) : 0
-  $: link = `${window.location.origin}/joinroom/${session.roomId}`
+  $: link = `${window.location.origin}/room/${session.roomId}`
 
   // Buttons give up focus right away: Space must keep flapping, not re-press them
   const act = (fn) => (event) => {
@@ -52,7 +52,7 @@
   <ul class="players">
     {#each session.players as player (player.id)}
       <li>
-        <span class="dot" style="background: {cssColor(player.color)}"></span>
+        <span class="dot" style="background: {colorCss(player.color)}"></span>
         <span class="name">{player.name}</span>
         {#if player.id === session.hostId}<span class="badge">host</span>{/if}
         {#if player.id === session.me}<span class="badge you">you</span>{/if}

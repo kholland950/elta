@@ -1,9 +1,8 @@
 <script>
   import { onDestroy, onMount } from 'svelte'
-  import { readable } from 'svelte/store'
   import { startGame } from 'game/Game'
   import { RoomConnection } from 'game/net/RoomConnection'
-  import { initialSession, meReturned } from 'game/race/session'
+  import { meReturned } from 'game/race/session'
   import { resultsShownAt } from 'game/race/replayTimeline'
   import { navigate } from 'svelte-routing'
   import events from './events'
@@ -17,6 +16,8 @@
   import { loadQuality, saveQuality } from 'game/fx/quality'
   import { loadBindings, saveBindings } from 'game/input/bindings'
   import { gamepadHub } from 'game/input/gamepadHub'
+  import { colorCss } from 'game/profile/palette'
+  import { loadPlayerProfile, savePlayerProfile } from './playerProfile'
 
   export let id
 
@@ -73,6 +74,13 @@
 
   const closeMenu = () => (menuOpen = false)
 
+  // Saved here and sent to the room; everyone's orbs update from the room state that comes back
+  const setProfile = (next) => {
+    profile = next
+    savePlayerProfile(next)
+    conn.updateProfile(next)
+  }
+
   // Unmounting the room closes the connection cleanly, so the seat is freed straight away
   const leave = () => navigate('/')
 
@@ -80,43 +88,34 @@
     showScoreboard = show
   })
 
-  const name = localStorage.getItem('name')
-  const color = localStorage.getItem('color')
-  const validName = name?.match(/[\w\d ]+/) && name.length >= 2 && name.length <= 15
-  let conn = null
-  let session = readable(initialSession(id))
-  let chatLog = readable([])
+  let profile = loadPlayerProfile()
   let status = 'connecting'
 
-  if (!validName || !color) {
-    setTimeout(() => navigate(`/joinroom/${id}`))
-  } else {
-    // Order matters: the connection doesn't replay, so the store and game subscribe right away
-    conn = new RoomConnection({ roomId: id, name, color })
-    session = createRoomStore(conn)
-    chatLog = createChatStore(conn)
-    const game = startGame(conn)
-    // conn.close() drops status listeners too
-    conn.onStatus((s) => (status = s))
+  // Order matters: the connection doesn't replay, so the store and game subscribe right away
+  const conn = new RoomConnection({ roomId: id, name: profile.name, color: profile.color })
+  const session = createRoomStore(conn)
+  const chatLog = createChatStore(conn)
+  const game = startGame(conn)
+  // conn.close() drops status listeners too
+  conn.onStatus((s) => (status = s))
 
-    onDestroy(() => {
-      conn.close()
-      game.canvas?.remove()
-      game.destroy(true)
-    })
-  }
+  onDestroy(() => {
+    conn.close()
+    game.canvas?.remove()
+    game.destroy(true)
+  })
 
   onDestroy(() => events.remove('showScoreboard'))
 
   // The results panel waits out the round-end replay, which runs on the server clock
   let now = 0
-  const clock = setInterval(() => (now = conn ? conn.serverNow() : 0), 250)
+  const clock = setInterval(() => (now = conn.serverNow()), 250)
   onDestroy(() => clearInterval(clock))
   let seenEnd = null
   let receivedAt = 0
   $: if ($session.lastRoundEnd !== seenEnd) {
     seenEnd = $session.lastRoundEnd
-    receivedAt = conn ? conn.serverNow() : 0
+    receivedAt = conn.serverNow()
     now = receivedAt
   }
   $: replayDone = seenEnd !== null && now >= resultsShownAt(seenEnd, receivedAt)
@@ -140,7 +139,7 @@
     <ul>
       {#each $session.players as player (player.id)}
         <li>
-          <span class="dot" style="background: {player.color.toLowerCase()}"></span>
+          <span class="dot" style="background: {colorCss(player.color)}"></span>
           {player.name}
           {#if player.wins > 0}<span class="wins">{player.wins}</span>{/if}
         </li>
@@ -148,13 +147,13 @@
     </ul>
   </div>
 
-  {#if conn && inLobby}
+  {#if inLobby}
     <Lobby {conn} session={$session} />
   {/if}
-  {#if conn && inResults}
+  {#if inResults}
     <RoundResults {conn} session={$session} />
   {/if}
-  {#if conn && !$session.rejected}
+  {#if !$session.rejected}
     <Chat {conn} log={chatLog} bind:open={chatOpen} blocked={menuOpen} />
   {/if}
   {#if !$session.rejected}
@@ -166,6 +165,9 @@
       onQuality={setQuality}
       {bindings}
       onBindings={setBindings}
+      {profile}
+      onProfile={setProfile}
+      canCustomize={$session.phase === 'lobby'}
       onLeave={leave}
       onClose={closeMenu} />
   {/if}

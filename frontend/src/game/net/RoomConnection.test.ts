@@ -186,6 +186,16 @@ describe('RoomConnection', () => {
       expect(statuses).toEqual(['connected', 'reconnecting', 'connected'])
     })
 
+    it('sends updateProfile and rejoins with the new profile after a drop', () => {
+      const c = joinedConn()
+      c.updateProfile({ name: 'SwiftOtter', color: 'Mint' })
+      expect(sock.sent[sock.sent.length - 1]).toEqual({ event: 'updateProfile', data: { name: 'SwiftOtter', color: 'Mint' } })
+      sock.onclose?.()
+      vi.advanceTimersByTime(250)
+      sock.open()
+      expect(sock.sent[0]!.data).toMatchObject({ name: 'SwiftOtter', color: 'Mint', resumeToken: 'tok' })
+    })
+
     it('keeps listeners across a reconnect', () => {
       const c = joinedConn()
       const cb = vi.fn()

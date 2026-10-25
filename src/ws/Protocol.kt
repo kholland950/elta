@@ -42,6 +42,10 @@ data class ClockPing(val t0: JsonElement) : ClientMessage
 @Serializable
 data class UpdateSettings(val winsToMatch: Int, val difficulty: Int) : ClientMessage
 
+/** A player's new name and orb color, from the Customize screen in the lobby. */
+@Serializable
+data class UpdateProfile(val name: String, val color: String) : ClientMessage
+
 data object StartMatch : ClientMessage
 
 data object ReturnToLobby : ClientMessage
@@ -72,6 +76,7 @@ fun decodeClient(text: String): ClientMessage? = try {
         "joinRoom" -> wireJson.decodeFromJsonElement<JoinRoom>(data)
         "clockPing" -> wireJson.decodeFromJsonElement<ClockPing>(data)
         "updateSettings" -> wireJson.decodeFromJsonElement<UpdateSettings>(data)
+        "updateProfile" -> wireJson.decodeFromJsonElement<UpdateProfile>(data)
         "startMatch" -> StartMatch
         "returnToLobby" -> ReturnToLobby
         "voteSkip" -> wireJson.decodeFromJsonElement<VoteSkip>(data)

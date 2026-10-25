@@ -44,7 +44,7 @@ const CLOSE_DEAD_LINK = 4000
 /** Control messages kept while reconnecting, sent once the seat is back. */
 const MAX_PENDING = 20
 const QUEUED: ReadonlySet<ClientEvent> = new Set<ClientEvent>([
-  'finishReport', 'voteSkip', 'updateSettings', 'startMatch', 'returnToLobby',
+  'finishReport', 'voteSkip', 'updateSettings', 'updateProfile', 'startMatch', 'returnToLobby',
 ])
 
 const buildId = (): string => (typeof __BUILD_ID__ !== 'undefined' ? __BUILD_ID__ : 'dev')
@@ -150,6 +150,13 @@ export class RoomConnection {
 
   updateSettings(s: RoomSettings): void {
     this.send('updateSettings', s)
+  }
+
+  /** A new name and color for this player; a later reconnect joins with them too. */
+  updateProfile(p: { name: string; color: string }): void {
+    this.opts.name = p.name
+    this.opts.color = p.color
+    this.send('updateProfile', { name: p.name, color: p.color })
   }
 
   startMatch(): void {

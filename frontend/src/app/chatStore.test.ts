@@ -24,8 +24,8 @@ describe('createChatStore', () => {
     push('chatMessage', { playerId: 'a', text: 'hi', quick: false })
     push('chatMessage', { playerId: 'a', text: 'ez', quick: true })
     expect(get(store).map((e) => [e.name, e.color, e.text, e.quick, e.at])).toEqual([
-      ['Ann', '#ff4d4d', 'hi', false, 42],
-      ['Ann', '#ff4d4d', 'ez', true, 42],
+      ['Ann', '#ff3d3d', 'hi', false, 42],
+      ['Ann', '#ff3d3d', 'ez', true, 42],
     ])
     conn.close()
   })

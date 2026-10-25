@@ -19,14 +19,19 @@
 
   function createRoom(event) {
     event.preventDefault()
-    navigate(`/joinroom/${randomRoomCode()}`)
+    navigate(`/room/${randomRoomCode()}`)
+  }
+
+  function customize(event) {
+    event.preventDefault()
+    navigate('/customize')
   }
 
   function joinRoom(event) {
     event.preventDefault()
     const code = roomCode.trim().toLowerCase()
     if (/^[a-z0-9]{4,12}$/.test(code)) {
-      navigate(`/joinroom/${code}`)
+      navigate(`/room/${code}`)
     }
   }
 </script>
@@ -47,5 +52,8 @@
         autocomplete="off" />
       <button class="button" type="submit"> Join Room </button>
     </form>
+    <div class="customize">
+      <button class="button button-outline" on:click={customize}> Customize </button>
+    </div>
   </div>
 </main>

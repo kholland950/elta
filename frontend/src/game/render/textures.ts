@@ -1,5 +1,15 @@
 import Phaser from 'phaser'
 
+/**
+ * The orb art in grayscale (white at the center, mid gray at the rim). Drawn with
+ * `ORB_TINT_MODE`, a player's color shows at the rim and fades to white in the middle.
+ */
+export const ORB_TEXTURE = 'orb'
+export const ORB_TINT_MODE = Phaser.TintModes.SCREEN
+
+export const loadOrbTexture = (scene: Phaser.Scene) =>
+  scene.load.image(ORB_TEXTURE, '/static/assets/OrbLight.png')
+
 /** Shared soft white radial dot, tinted per use (orb cores, nebula blobs). */
 export const GLOW_TEXTURE = 'fx-glow'
 

@@ -103,6 +103,44 @@ class RoomTest {
         assertEquals(running, running.updateSettings("a", 5, 7).room)
     }
 
+    @Test
+    fun updateProfileInLobbyChangesOnlyThatPlayer() {
+        val room = lobby("a", "b")
+        val step = room.updateProfile("b", "Swift Otter", "Mint")
+        assertEquals(Player("b", "Swift Otter", "Mint"), step.room.players[1])
+        assertEquals(room.players[0], step.room.players[0])
+        assertEquals(step.room, assertIs<RoomEvent.StateChanged>(step.events.single()).room)
+    }
+
+    @Test
+    fun updateProfileIgnoresBadInputUnknownPlayersAndNoChange() {
+        val room = lobby("a", "b")
+        for (step in listOf(
+            room.updateProfile("a", "x", "Mint"),
+            room.updateProfile("a", "bad-name", "Mint"),
+            room.updateProfile("a", "Okay", "Teal"),
+            room.updateProfile("z", "Okay", "Mint"),
+            room.updateProfile("a", "name a", "Blue"),
+        )) {
+            assertEquals(room, step.room)
+            assertTrue(step.events.isEmpty())
+        }
+    }
+
+    @Test
+    fun updateProfileOnlyInTheLobby() {
+        val running = started("a", "b")
+        val step = running.updateProfile("a", "Okay", "Mint")
+        assertEquals(running, step.room)
+        assertTrue(step.events.isEmpty())
+    }
+
+    @Test
+    fun joinAcceptsTheWholePalette() {
+        assertIs<JoinOutcome.Accepted>(Room("r").join("a", "okay", "Cyan", "b1"))
+        assertIs<JoinOutcome.Accepted>(Room("r").join("a", "okay", "Crimson", "b1"))
+    }
+
     // --- start ---
 
     @Test

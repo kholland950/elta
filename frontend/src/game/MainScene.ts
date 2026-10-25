@@ -40,6 +40,9 @@ import { ReplayCamera } from 'game/render/ReplayCamera'
 import { ReplaySequence } from 'game/render/ReplaySequence'
 import { RoundEndFX } from 'game/render/RoundEndFX'
 import { StageRenderer } from 'game/render/StageRenderer'
+import { loadOrbTexture } from 'game/render/textures'
+import { loadProfile } from 'game/profile/profileStore'
+import { randomName } from 'game/profile/randomName'
 import { StageWorld } from 'game/stage/StageWorld'
 
 const sceneConfig: Phaser.Types.Scenes.SettingsConfig = {
@@ -124,8 +127,7 @@ export class MainScene extends Phaser.Scene {
   }
 
   public preload() {
-    const colors = ['Blue', 'Green', 'Orange', 'Red', 'Violet', 'Yellow']
-    for (const color of colors) this.load.image(color, `/static/assets/${color}Light.png`)
+    loadOrbTexture(this)
 
     this.load.atlas('flares', '/static/assets/flares.png', '/static/assets/flares.json')
   }
@@ -165,8 +167,7 @@ export class MainScene extends Phaser.Scene {
       },
       director: this.raceDirector,
     })
-    const color = window.localStorage.getItem('color') || 'Blue'
-    const name = window.localStorage.getItem('name') || 'no name'
+    const { name, color } = loadProfile(window.localStorage, randomName, Math.random)
     // Placed at its slot when the first stage is built
     this.playerManager.addPlayer(color, name, true, 0, 0, this.localId)
 
@@ -331,6 +332,7 @@ export class MainScene extends Phaser.Scene {
     // The first roster is who was already here, not who joined
     this.playerManager.syncRemotes(remotePlayers(view), this.rosterSeen)
     if (view.players.length > 0) this.rosterSeen = true
+    this.playerManager.syncLooks(view.players)
     // During the match-over wait, players who went back to the lobby room and those still on the
     // match-end view don't see each other
     this.playerManager.setHiddenRemotes(hiddenRemoteIds(view))

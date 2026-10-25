@@ -64,7 +64,7 @@ class RoomActor(
     }
 
     /** A player's place in the room. While their connection is down [out] is null until [holdUntil]. */
-    private class Seat(val name: String, val token: String, var out: SendChannel<String>?, var holdUntil: Long? = null)
+    private class Seat(var name: String, val token: String, var out: SendChannel<String>?, var holdUntil: Long? = null)
 
     private val log = LoggerFactory.getLogger(RoomActor::class.java)
     private val commands = Channel<Command>(Channel.UNLIMITED)
@@ -212,6 +212,10 @@ class RoomActor(
                 if (id !in seats) return
                 when (val m = command.message) {
                     is UpdateSettings -> apply(room.updateSettings(id, m.winsToMatch, m.difficulty))
+                    is UpdateProfile -> {
+                        apply(room.updateProfile(id, m.name, m.color))
+                        room.players.find { it.id == id }?.let { seats[id]?.name = it.name }
+                    }
                     ReturnToLobby -> apply(room.returnToLobby(id))
                     StartMatch -> apply(room.startMatch(id, now, env))
                     is VoteSkip -> apply(room.voteSkip(id, m.round, now, env))
