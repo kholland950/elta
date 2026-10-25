@@ -9,6 +9,7 @@ import { PhysicsSprite, PlayerVisuals } from 'game/render/PlayerVisuals'
 import {
   BumpCooldowns,
   bumpVelocity,
+  endJumpCut,
   freshPilot,
   PilotState,
   recharge,
@@ -248,6 +249,7 @@ export class PlayerManager {
       { id: remote.id, x: other.body.center.x, y: other.body.center.y },
     )
     local.sprite.body.setVelocity(v.x, v.y)
+    this.pilot = endJumpCut(this.pilot)
     this.feel.emit({
       kind: 'collision',
       playerId: local.id,

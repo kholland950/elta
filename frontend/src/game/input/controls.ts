@@ -7,8 +7,9 @@ type Dir = 1 | -1
 /**
  * The orb's key, mouse-button and pad state under some bindings, fed raw events by code (pad
  * buttons come as `Pad<N>` codes like any key) plus the shaped left stick. Left/right are held;
- * jump and stall latch on a fresh press. Dash is a held modifier: a dash latches on a fresh
- * direction press while it's held, or on a fresh dash press while a direction is held (the one
+ * jump and stall latch on a fresh press, and jump is also read as held (until every jump binding
+ * is let go) so a released first flap can be cut short. Dash is a held modifier: a dash latches on
+ * a fresh direction press while it's held, or on a fresh dash press while a direction is held (the one
  * pressed last, if both are). The stick pushed past STICK_PRESS counts as pressing its direction.
  * Latches wait for the next physics step, so a press shorter than a step is never lost and one is
  * never seen twice when several steps run in a frame.
@@ -100,6 +101,7 @@ export class Controls {
     const input: InputFrame = {
       moveX: left || right ? Number(right) - Number(left) : this.stick,
       flapPressed: this.jump,
+      flapHeld: this.keyHeld('jump'),
       dash: this.dash,
       stallPressed: this.stall,
     }
@@ -134,7 +136,7 @@ export class Controls {
     if (!this.isHeld(dir === 1 ? 'right' : 'left')) this.dirs = this.dirs.filter((d) => d !== dir)
   }
 
-  private keyHeld(action: 'left' | 'right' | 'dash'): boolean {
+  private keyHeld(action: 'left' | 'right' | 'dash' | 'jump'): boolean {
     return this.bindings[action].some((code) => code !== null && this.held.has(code))
   }
 
