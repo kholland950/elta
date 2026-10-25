@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BumpCooldowns,
   bumpVelocity,
+  endJumpCut,
   freshPilot,
   InputFrame,
   NO_INPUT,
@@ -18,7 +19,9 @@ import {
   CLIMB_BUDGET,
   DASH_SPEED,
   GRAVITY,
+  JUMP_CUT,
   JUMP_VELOCITY,
+  launchApex,
   maxFlapClimb,
   ORB_RADIUS,
   SEA_CLIMB_BUDGET,
@@ -28,7 +31,12 @@ import {
 } from './tuning'
 
 const press = (over: Partial<InputFrame>): InputFrame => ({ ...NO_INPUT, ...over })
-const flap = press({ flapPressed: true })
+/** A flap with jump held, so the first one is never cut. */
+const flap = press({ flapPressed: true, flapHeld: true })
+const tap = press({ flapPressed: true })
+const hold = press({ flapHeld: true })
+/** Velocity after one rising step under gravity and drag, as the body would hand it back. */
+const rise = (vy: number) => ({ x: 0, y: vy + (GRAVITY + BODY.drag) / STEP_HZ })
 
 describe('stepPilot', () => {
   it('lifts by the flap sequence and then gives nothing', () => {
@@ -242,14 +250,14 @@ const simulate = (
   return { minY, pos }
 }
 
-/** Flaps at the top of every arc, the best possible climb. */
+/** Flaps at the top of every arc with jump held throughout, the best possible climb. */
 const flapAtApex = (inSea: (y: number) => boolean) => {
   let state = freshPilot()
   let prevVy = 0
   return (step: number, pos: { y: number }, vel: { x: number; y: number }) => {
     const atApex = step === 0 || (prevVy < 0 && vel.y >= 0)
     prevVy = vel.y
-    const out = stepPilot(state, atApex ? flap : NO_INPUT, vel)
+    const out = stepPilot(state, atApex ? flap : hold, vel)
     state = out.state
     return { vel: inSea(pos.y) ? seaDrag(out.velocity) : out.velocity, accelX: out.accelX }
   }
@@ -273,5 +281,99 @@ describe('reach budgets against the integrated motion', () => {
     const { minY } = simulate(600, { x: 0, y: SEA_DEPTH - ORB_RADIUS }, flapAtApex((y) => y > 0))
     // Highest surface top the orb's underside clears, measured above the sea surface (y = 0)
     expect(-(minY + ORB_RADIUS)).toBeGreaterThanOrEqual(SEA_CLIMB_BUDGET)
+  })
+})
+
+describe('jump cut', () => {
+  /** A held first flap, then `steps` more held steps of rising. */
+  const launched = (steps = 1) => {
+    let out = stepPilot(freshPilot(), flap, { x: 0, y: 0 })
+    for (let i = 0; i < steps; i++) out = stepPilot(out.state, hold, rise(out.velocity.y))
+    return out
+  }
+
+  it('leaves a held first flap at full speed', () => {
+    const out = launched()
+    expect(out.velocity.y).toBe(-JUMP_VELOCITY + (GRAVITY + BODY.drag) / STEP_HZ)
+    expect(out.state.jumpCut).toBe(true)
+  })
+
+  it('cuts once when jump is released mid-rise', () => {
+    const up = launched(3)
+    const cut = stepPilot(up.state, NO_INPUT, rise(up.velocity.y))
+    expect(cut.velocity.y).toBeCloseTo(rise(up.velocity.y).y * JUMP_CUT)
+    expect(cut.state.jumpCut).toBe(false)
+    const again = stepPilot(cut.state, NO_INPUT, rise(cut.velocity.y))
+    expect(again.velocity.y).toBe(rise(cut.velocity.y).y)
+  })
+
+  it('cuts a press and release inside one step on that step', () => {
+    const out = stepPilot(freshPilot(), tap, { x: 0, y: 0 })
+    expect(out.velocity.y).toBe(-JUMP_VELOCITY * JUMP_CUT)
+    expect(out.events).toEqual([{ kind: 'flap' }])
+  })
+
+  it('does nothing once the orb stops rising', () => {
+    const up = launched()
+    const out = stepPilot(up.state, NO_INPUT, { x: 0, y: 0 })
+    expect(out.velocity.y).toBe(0)
+    expect(out.state.jumpCut).toBe(false)
+    // Nor later, should something lift it again
+    expect(stepPilot(out.state, NO_INPUT, { x: 0, y: -100 }).velocity.y).toBe(-100)
+  })
+
+  it('never cuts later flaps', () => {
+    const second = stepPilot(launched().state, tap, { x: 0, y: -500 })
+    expect(second.velocity.y).toBe(-JUMP_VELOCITY * 0.8)
+    expect(stepPilot(second.state, NO_INPUT, rise(second.velocity.y)).velocity.y).toBe(
+      rise(second.velocity.y).y,
+    )
+  })
+
+  it('closes the window on a stall', () => {
+    const stalled = stepPilot(launched().state, press({ stallPressed: true, flapHeld: true }), {
+      x: 0,
+      y: -900,
+    })
+    expect(stalled.state.jumpCut).toBe(false)
+    // A push upward after the stall is not cut on release
+    expect(stepPilot(stalled.state, NO_INPUT, { x: 0, y: -300 }).velocity.y).toBe(-300)
+  })
+
+  it('closes the window when something pushes the orb up harder', () => {
+    const up = launched()
+    // A bounce pad sets a faster rise than the last step left
+    const padded = stepPilot(up.state, NO_INPUT, { x: 0, y: up.velocity.y - 700 })
+    expect(padded.velocity.y).toBe(up.velocity.y - 700)
+    expect(padded.state.jumpCut).toBe(false)
+  })
+
+  it('endJumpCut closes the window', () => {
+    const up = launched()
+    const bumped = endJumpCut(up.state)
+    expect(bumped.jumpCut).toBe(false)
+    expect(stepPilot(bumped, NO_INPUT, rise(up.velocity.y)).velocity.y).toBe(rise(up.velocity.y).y)
+  })
+
+  it('keeps the window through a recharge', () => {
+    expect(recharge(launched().state).state.jumpCut).toBe(true)
+  })
+
+  it('gives a tap about a quarter of the held height', () => {
+    const apex = (input: InputFrame) => {
+      let state = freshPilot()
+      const start = { x: 0, y: -1000 }
+      const { minY } = simulate(240, start, (step, _pos, vel) => {
+        const out = stepPilot(state, step === 0 ? input : press({ flapHeld: input.flapHeld }), vel)
+        state = out.state
+        return { vel: out.velocity, accelX: out.accelX }
+      })
+      return start.y - minY
+    }
+    const held = apex(flap)
+    const tapped = apex(tap)
+    expect(held).toBeCloseTo(launchApex(JUMP_VELOCITY), 0)
+    expect(tapped / held).toBeGreaterThan(0.22)
+    expect(tapped / held).toBeLessThan(0.28)
   })
 })

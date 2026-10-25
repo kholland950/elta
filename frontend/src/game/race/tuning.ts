@@ -32,6 +32,11 @@ export const STICK_RELEASE = 0.35
 export const JUMP_VELOCITY = 1000
 export const DASH_SPEED = 1500
 export const DASHES_ALLOWED = 2
+/**
+ * Letting go of jump while the first flap still rises multiplies its upward speed by this, once. At
+ * 0.5 the quickest tap rises about a quarter of a held flap; holding gives the full arc.
+ */
+export const JUMP_CUT = 0.5
 /** Lift of each flap as a fraction of JUMP_VELOCITY; once used up, further flaps do nothing. */
 export const FLAP_SEQUENCE: ReadonlyArray<number> = [1, 0.8, 0.6, 0.4, 0.2]
 

@@ -101,6 +101,30 @@ describe('Controls', () => {
     expect(c.frame().flapPressed).toBe(false)
   })
 
+  it('reads jump as held while any of its bindings is, pad included', () => {
+    const c = new Controls(DEFAULT_BINDINGS)
+    expect(c.frame().flapHeld).toBe(false)
+    down(c, 'Space', 'Pad0')
+    expect(c.frame()).toMatchObject({ flapPressed: true, flapHeld: true })
+    c.keyUp('Space')
+    expect(c.frame()).toMatchObject({ flapPressed: false, flapHeld: true })
+    c.keyUp('Pad0')
+    expect(c.frame().flapHeld).toBe(false)
+  })
+
+  it('stops holding jump on releaseAll and follows a rebind', () => {
+    const c = new Controls(DEFAULT_BINDINGS)
+    down(c, 'ArrowUp')
+    c.releaseAll()
+    expect(c.frame().flapHeld).toBe(false)
+    c.setBindings(rebind(DEFAULT_BINDINGS, 'jump', 0, 'KeyW'))
+    down(c, 'KeyW')
+    expect(c.frame().flapHeld).toBe(true)
+    down(c, 'Space')
+    c.keyUp('KeyW')
+    expect(c.frame().flapHeld).toBe(false)
+  })
+
   it('cancels movement when both directions are held', () => {
     const c = new Controls(DEFAULT_BINDINGS)
     down(c, 'KeyA', 'KeyD')

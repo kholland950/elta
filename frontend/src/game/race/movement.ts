@@ -5,6 +5,7 @@ import {
   DASH_SPEED,
   DASHES_ALLOWED,
   FLAP_SEQUENCE,
+  JUMP_CUT,
   JUMP_VELOCITY,
   SEA_DAMP_Y,
   SEA_MAX_VX,
@@ -16,6 +17,8 @@ export interface InputFrame {
   /** Horizontal input from -1 (full left) to 1 (full right); a key or the D-pad gives ±1. */
   moveX: number
   flapPressed: boolean
+  /** Any jump binding is held; letting go cuts a rising first flap short. */
+  flapHeld: boolean
   /** Direction of a dash asked for this step, or 0 for none. */
   dash: 1 | -1 | 0
   stallPressed: boolean
@@ -24,6 +27,7 @@ export interface InputFrame {
 export const NO_INPUT: InputFrame = {
   moveX: 0,
   flapPressed: false,
+  flapHeld: false,
   dash: 0,
   stallPressed: false,
 }
@@ -35,6 +39,10 @@ export interface PilotState {
   canStall: boolean
   /** Last held or dashed direction. */
   facing: 1 | -1
+  /** A first flap is rising and releasing jump would still cut it. */
+  jumpCut: boolean
+  /** Vertical velocity the last step set, to spot an outside upward push (a pad or bump). */
+  lastVy: number
 }
 
 export const freshPilot = (): PilotState => ({
@@ -42,7 +50,16 @@ export const freshPilot = (): PilotState => ({
   dashes: DASHES_ALLOWED,
   canStall: true,
   facing: 1,
+  jumpCut: false,
+  lastVy: 0,
 })
+
+/**
+ * Gravity and drag only ever make vy larger between steps; a vy more upward than the last one set,
+ * by more than this (px/s), means something else pushed the orb. Well above float noise and well
+ * below any pad or bump speed.
+ */
+const PUSH_EPSILON = 1
 
 export interface Velocity {
   x: number
@@ -61,8 +78,10 @@ export interface PilotStep {
 }
 
 /**
- * Applies one step of input. Order within a step: stall (instant stop), then flap, then dash, so a
- * stall and a dash pressed together leave a pure horizontal dash.
+ * Applies one step of input. Order within a step: stall (instant stop), then flap, then the jump
+ * cut, then dash, so a stall and a dash pressed together leave a pure horizontal dash. The first
+ * flap of a sequence is cut to JUMP_CUT of its speed once if jump is let go while it still rises;
+ * the apex, a stall, another flap or an outside push ends that window.
  */
 export const stepPilot = (state: PilotState, input: InputFrame, vel: Velocity): PilotStep => {
   const next = { ...state }
@@ -70,18 +89,26 @@ export const stepPilot = (state: PilotState, input: InputFrame, vel: Velocity): 
   const events: Array<PilotEvent> = []
 
   if (input.moveX !== 0) next.facing = input.moveX > 0 ? 1 : -1
+  if (vel.y >= 0 || vel.y < state.lastVy - PUSH_EPSILON) next.jumpCut = false
 
   if (input.stallPressed && next.canStall) {
     velocity.x = 0
     velocity.y = 0
     next.canStall = false
+    next.jumpCut = false
     events.push({ kind: 'stall' })
   }
 
   if (input.flapPressed && next.flapIndex < FLAP_SEQUENCE.length) {
     velocity.y = -JUMP_VELOCITY * FLAP_SEQUENCE[next.flapIndex]
+    next.jumpCut = next.flapIndex === 0
     next.flapIndex += 1
     events.push({ kind: 'flap' })
+  }
+
+  if (next.jumpCut && !input.flapHeld && velocity.y < 0) {
+    velocity.y *= JUMP_CUT
+    next.jumpCut = false
   }
 
   if (input.dash !== 0 && next.dashes > 0) {
@@ -91,10 +118,17 @@ export const stepPilot = (state: PilotState, input: InputFrame, vel: Velocity): 
     events.push({ kind: 'dash', dir: input.dash })
   }
 
+  next.lastVy = velocity.y
   return { state: next, velocity, accelX: input.moveX * ACCELERATION, events }
 }
 
-/** Refills flaps, dashes and stall. `restored` is false when nothing had been used. */
+/** Closes the jump-cut window, e.g. when a bump sets the orb's velocity. */
+export const endJumpCut = (state: PilotState): PilotState => ({ ...state, jumpCut: false })
+
+/**
+ * Refills flaps, dashes and stall. `restored` is false when nothing had been used. A rising first
+ * flap keeps its jump-cut window, so brushing a wall doesn't take the short hop away.
+ */
 export const recharge = (state: PilotState): { state: PilotState; restored: boolean } => {
   const restored = state.flapIndex > 0 || state.dashes < DASHES_ALLOWED || !state.canStall
   return {
