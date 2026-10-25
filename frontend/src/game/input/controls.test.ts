@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { DEFAULT_BINDINGS, rebind } from './bindings'
 import { Controls } from './controls'
+import { stickX } from './gamepad'
 
 const down = (c: Controls, ...codes: Array<string>) => codes.forEach((code) => c.keyDown(code, false))
 
@@ -8,17 +9,17 @@ describe('Controls', () => {
   it('holds directions until released', () => {
     const c = new Controls(DEFAULT_BINDINGS)
     down(c, 'KeyA')
-    expect(c.frame()).toMatchObject({ left: true, right: false })
-    expect(c.frame().left).toBe(true)
+    expect(c.frame().moveX).toBe(-1)
+    expect(c.frame().moveX).toBe(-1)
     c.keyUp('KeyA')
-    expect(c.frame().left).toBe(false)
+    expect(c.frame().moveX).toBe(0)
   })
 
   it('keeps a direction held while either of its keys is', () => {
     const c = new Controls(DEFAULT_BINDINGS)
     down(c, 'ArrowRight', 'KeyD')
     c.keyUp('ArrowRight')
-    expect(c.frame().right).toBe(true)
+    expect(c.frame().moveX).toBe(1)
   })
 
   it('latches jump and stall once per fresh press, ignoring repeats', () => {
@@ -34,7 +35,7 @@ describe('Controls', () => {
     down(c, 'ShiftLeft')
     expect(c.frame().dash).toBe(0)
     down(c, 'ArrowRight')
-    expect(c.frame()).toMatchObject({ dash: 1, right: true })
+    expect(c.frame()).toMatchObject({ dash: 1, moveX: 1 })
     expect(c.frame().dash).toBe(0)
   })
 
@@ -71,7 +72,7 @@ describe('Controls', () => {
 
     const dashRight = new Controls(rebind(DEFAULT_BINDINGS, 'dash', 1, 'KeyD'))
     down(dashRight, 'KeyD')
-    expect(dashRight.frame()).toMatchObject({ dash: 1, right: true })
+    expect(dashRight.frame()).toMatchObject({ dash: 1, moveX: 1 })
   })
 
   it('treats a bound mouse button like a key', () => {
@@ -93,17 +94,117 @@ describe('Controls', () => {
     const c = new Controls(DEFAULT_BINDINGS)
     down(c, 'KeyA', 'Space')
     c.setBindings(rebind(DEFAULT_BINDINGS, 'jump', 0, 'KeyW'))
-    expect(c.frame()).toMatchObject({ left: false, flapPressed: false })
+    expect(c.frame()).toMatchObject({ moveX: 0, flapPressed: false })
     down(c, 'KeyW')
     expect(c.frame().flapPressed).toBe(true)
     down(c, 'Space')
     expect(c.frame().flapPressed).toBe(false)
   })
 
-  it('releaseAll drops held keys and latches', () => {
+  it('cancels movement when both directions are held', () => {
+    const c = new Controls(DEFAULT_BINDINGS)
+    down(c, 'KeyA', 'KeyD')
+    expect(c.frame().moveX).toBe(0)
+  })
+
+  it('releaseAll drops held keys, the stick and latches', () => {
     const c = new Controls(DEFAULT_BINDINGS)
     down(c, 'KeyA', 'Space')
     c.releaseAll()
-    expect(c.frame()).toMatchObject({ left: false, flapPressed: false })
+    expect(c.frame()).toMatchObject({ moveX: 0, flapPressed: false })
+    c.setStick(stickX(0.8))
+    c.releaseAll()
+    expect(c.frame().moveX).toBe(0)
+  })
+
+  describe('pad', () => {
+    it('plays on the default pad buttons like keys', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      down(c, 'Pad0', 'Pad5')
+      expect(c.frame()).toMatchObject({ flapPressed: true, stallPressed: true })
+      down(c, 'Pad15')
+      expect(c.frame().moveX).toBe(1)
+      c.keyUp('Pad15')
+      expect(c.frame().moveX).toBe(0)
+    })
+
+    it('dashes on LB held and the D-pad pressed', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      down(c, 'Pad4', 'Pad14')
+      expect(c.frame()).toMatchObject({ dash: -1, moveX: -1 })
+    })
+
+    it('steers by how far the stick is pushed', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      c.setStick(stickX(0.4))
+      expect(c.frame().moveX).toBeCloseTo(0.267, 3)
+      c.setStick(stickX(-1))
+      expect(c.frame().moveX).toBe(-1)
+      c.setStick(stickX(0.1))
+      expect(c.frame().moveX).toBe(0)
+    })
+
+    it('dashes when the stick is pushed far with LB held, but not on a light push', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      down(c, 'Pad4')
+      c.setStick(stickX(0.4))
+      expect(c.frame().dash).toBe(0)
+      c.setStick(stickX(0.6))
+      expect(c.frame().dash).toBe(1)
+      // Held out: no second dash
+      c.setStick(stickX(0.9))
+      expect(c.frame().dash).toBe(0)
+    })
+
+    it('dashes on LB pressed with the stick already out', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      c.setStick(stickX(-0.7))
+      c.frame()
+      down(c, 'Pad4')
+      expect(c.frame().dash).toBe(-1)
+    })
+
+    it('needs the stick to come back past the release point before it presses again', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      down(c, 'Pad4')
+      c.setStick(stickX(0.7))
+      expect(c.frame().dash).toBe(1)
+      // Shaped 0.4 is below the press point but above the release point: still held
+      c.setStick(0.4)
+      c.setStick(0.6)
+      expect(c.frame().dash).toBe(0)
+      c.setStick(0.3)
+      c.setStick(0.6)
+      expect(c.frame().dash).toBe(1)
+    })
+
+    it('dashes the other way when the stick is flicked across', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      down(c, 'Pad4')
+      c.setStick(0.8)
+      c.frame()
+      c.setStick(-0.8)
+      expect(c.frame()).toMatchObject({ dash: -1, moveX: -0.8 })
+    })
+
+    it('does not count the stick as a fresh press of a direction a key holds', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      down(c, 'KeyD', 'ShiftLeft')
+      c.frame()
+      c.setStick(0.8)
+      expect(c.frame().dash).toBe(0)
+    })
+
+    it('lets a held key or D-pad direction override the stick', () => {
+      const c = new Controls(DEFAULT_BINDINGS)
+      c.setStick(0.3)
+      down(c, 'KeyA')
+      expect(c.frame().moveX).toBe(-1)
+      c.keyUp('KeyA')
+      down(c, 'Pad15')
+      expect(c.frame().moveX).toBe(1)
+      c.keyUp('Pad15')
+      expect(c.frame().moveX).toBe(0.3)
+    })
   })
 })

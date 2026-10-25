@@ -3,16 +3,18 @@
   import { move } from './menuNav'
   import { menuActionForKey } from './menuKeys'
   import { keyLabel, loadLayoutMap } from './keyLabel'
+  import { usePadMenu } from './padMenu'
   import {
     ACTIONS,
     ACTION_LABELS,
-    CLEAR_CODES,
     DEFAULT_BINDINGS,
-    RESERVED,
+    PAD_SLOT,
     actionsFor,
+    captureOutcome,
     clearSlot,
     duplicates,
     mouseCode,
+    padCode,
     rebind,
   } from 'game/input/bindings'
 
@@ -20,8 +22,9 @@
   export let onChange
   export let onBack
 
-  // One row per action with its two slots, then Reset, then Back
-  const grid = [...ACTIONS.map(() => 2), 1, 1]
+  // One row per action with its two key slots and pad slot, then Reset, then Back
+  const grid = [...ACTIONS.map(() => 3), 1, 1]
+  const SLOT_NAMES = ['primary', 'secondary', 'pad']
   const RESET = ACTIONS.length
   const BACK = ACTIONS.length + 1
   const refs = grid.map(() => [])
@@ -70,19 +73,26 @@
     onChange(next)
   }
 
-  // Esc cancels, Backspace/Delete empties the slot, a reserved key is refused and capture goes on
-  const capture = (event) => {
-    if (event.repeat) return
-    if (event.code === 'Escape') {
-      capturing = null
-    } else if (CLEAR_CODES.has(event.code)) {
-      const { action, slot } = capturing
-      capturing = null
-      onChange(clearSlot(bindings, action, slot))
-    } else if (RESERVED.has(event.code)) {
-      notice = `${keyLabel(event.code, layout)} is reserved`
-    } else {
-      bind(event.code)
+  // Esc or B cancels, Backspace/Delete or View empties the slot; a reserved key or one from the
+  // other device is refused and capture goes on
+  const capture = (code) => {
+    const { action, slot } = capturing
+    switch (captureOutcome(slot, code)) {
+      case 'cancel':
+        capturing = null
+        break
+      case 'clear':
+        capturing = null
+        onChange(clearSlot(bindings, action, slot))
+        break
+      case 'reserved':
+        notice = `${keyLabel(code, layout)} is reserved`
+        break
+      case 'wrongDevice':
+        notice = slot === PAD_SLOT ? 'Press a pad button' : 'Press a key or mouse button'
+        break
+      default:
+        bind(code)
     }
   }
 
@@ -91,8 +101,28 @@
     if (!capturing) return
     event.preventDefault()
     swallowClick = event.button === 0
-    bind(mouseCode(event.button))
+    capture(mouseCode(event.button))
   }
+
+  // Shared by the keyboard and the pad
+  const apply = (action) => {
+    if (action === 'confirm') refs[selection.row][selection.col]?.click()
+    else if (action === 'back') onBack()
+    else selection = move(grid, selection, action)
+  }
+
+  // While capturing, every pad button belongs to the capture, B and View included, and the stick
+  // doesn't move the highlight
+  usePadMenu({
+    button: (button) => {
+      if (!capturing) return false
+      capture(padCode(button))
+      return true
+    },
+    action: (action) => {
+      if (!capturing) apply(action)
+    },
+  })
 
   // Swallow the click that follows, so it can't also press whatever button is under the mouse
   const onClickCapture = (event) => {
@@ -106,15 +136,13 @@
     if (capturing) {
       // Every key belongs to the capture, Tab and Space included
       event.preventDefault()
-      capture(event)
+      if (!event.repeat) capture(event.code)
       return
     }
     const action = menuActionForKey(event)
     if (!action) return
     event.preventDefault()
-    if (action === 'confirm') refs[selection.row][selection.col]?.click()
-    else if (action === 'back') onBack()
-    else selection = move(grid, selection, action)
+    apply(action)
   }
 </script>
 
@@ -123,7 +151,7 @@
 <div class="backdrop">
   <div class="bindings card" role="dialog" aria-modal="true" aria-labelledby="bindings-title">
     <h2 id="bindings-title">Key bindings</h2>
-    <p class="hint">Press a key or mouse button · Backspace clears · Esc cancels</p>
+    <p class="hint">Press a key, mouse or pad button · Backspace or View clears · Esc or B cancels</p>
 
     <div class="rows">
       {#each ACTIONS as action, row}
@@ -138,8 +166,8 @@
             title={code !== null && dup.has(code)
               ? `Also bound to ${othersFor(bindings, action, code).join(', ') || ACTION_LABELS[action]}`
               : undefined}
-            aria-label="{ACTION_LABELS[action]} {slot === 0 ? 'primary' : 'secondary'}: {listening
-              ? 'press a key'
+            aria-label="{ACTION_LABELS[action]} {SLOT_NAMES[slot]}: {listening
+              ? slot === PAD_SLOT ? 'press a pad button' : 'press a key'
               : code === null
                 ? 'unbound'
                 : keyLabel(code, layout)}"
@@ -147,7 +175,11 @@
             on:pointermove={() => select(row, slot)}
             on:focusin={() => select(row, slot)}
             on:click={() => startCapture(action, slot)}>
-            {listening ? 'Press a key…' : code === null ? '—' : keyLabel(code, layout)}
+            {listening
+              ? slot === PAD_SLOT ? 'Press a button…' : 'Press a key…'
+              : code === null
+                ? '—'
+                : keyLabel(code, layout)}
           </button>
         {/each}
       {/each}
@@ -212,7 +244,7 @@
 
   .rows {
     display: grid;
-    grid-template-columns: auto 1fr 1fr;
+    grid-template-columns: auto 1fr 1fr 1fr;
     align-items: center;
     gap: 0.6rem 0.8rem;
   }
@@ -226,8 +258,8 @@
   }
 
   .slot {
-    min-width: 8rem;
-    padding: 0 0.8rem;
+    min-width: 7rem;
+    padding: 0 0.6rem;
     text-transform: none;
   }
 

@@ -13,8 +13,8 @@ import {
 
 /** One physics step's worth of input. Presses are latched between steps so none are lost. */
 export interface InputFrame {
-  left: boolean
-  right: boolean
+  /** Horizontal input from -1 (full left) to 1 (full right); a key or the D-pad gives ±1. */
+  moveX: number
   flapPressed: boolean
   /** Direction of a dash asked for this step, or 0 for none. */
   dash: 1 | -1 | 0
@@ -22,8 +22,7 @@ export interface InputFrame {
 }
 
 export const NO_INPUT: InputFrame = {
-  left: false,
-  right: false,
+  moveX: 0,
   flapPressed: false,
   dash: 0,
   stallPressed: false,
@@ -70,8 +69,7 @@ export const stepPilot = (state: PilotState, input: InputFrame, vel: Velocity): 
   const velocity = { x: vel.x, y: vel.y }
   const events: Array<PilotEvent> = []
 
-  const dir = input.right === input.left ? 0 : input.right ? 1 : -1
-  if (dir !== 0) next.facing = dir
+  if (input.moveX !== 0) next.facing = input.moveX > 0 ? 1 : -1
 
   if (input.stallPressed && next.canStall) {
     velocity.x = 0
@@ -93,7 +91,7 @@ export const stepPilot = (state: PilotState, input: InputFrame, vel: Velocity): 
     events.push({ kind: 'dash', dir: input.dash })
   }
 
-  return { state: next, velocity, accelX: dir * ACCELERATION, events }
+  return { state: next, velocity, accelX: input.moveX * ACCELERATION, events }
 }
 
 /** Refills flaps, dashes and stall. `restored` is false when nothing had been used. */

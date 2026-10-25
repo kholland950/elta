@@ -19,6 +19,7 @@ import {
 import { BODY, STEP_MS } from 'game/race/tuning'
 import { type Bindings, mouseCode } from 'game/input/bindings'
 import { Controls } from 'game/input/controls'
+import { gamepadHub } from 'game/input/gamepadHub'
 
 /** Own position updates sent per second. */
 export const MOVE_TPS = 32
@@ -112,6 +113,10 @@ export class PlayerManager {
     }
     window.addEventListener('mousedown', onMouseDown)
     window.addEventListener('mouseup', onMouseUp)
+    // Pad buttons arrive as Pad<N> codes through the same Controls; the hub blocks them in menus
+    const offPad = gamepadHub.setGameSink(this.controls)
+    // Destroying the whole game emits DESTROY but not SHUTDOWN, so the pad lets go on either
+    this.scene.events.once(Phaser.Scenes.Events.DESTROY, offPad)
     // Key-ups are missed while the window is unfocused
     const onBlur = () => this.controls.releaseAll()
     this.scene.game.events.on(Phaser.Core.Events.BLUR, onBlur)
@@ -119,6 +124,8 @@ export class PlayerManager {
       this.scene.game.events.off(Phaser.Core.Events.BLUR, onBlur)
       window.removeEventListener('mousedown', onMouseDown)
       window.removeEventListener('mouseup', onMouseUp)
+      this.scene.events.off(Phaser.Scenes.Events.DESTROY, offPad)
+      offPad()
     })
   }
 

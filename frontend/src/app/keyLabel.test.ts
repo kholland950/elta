@@ -15,6 +15,22 @@ describe('keyLabel', () => {
     expect(keyLabel('Mouse5')).toBe('Mouse 6')
   })
 
+  it('names pad buttons as printed on an Xbox-style pad', () => {
+    expect(keyLabel('Pad0')).toBe('A')
+    expect(keyLabel('Pad1')).toBe('B')
+    expect(keyLabel('Pad3')).toBe('Y')
+    expect(keyLabel('Pad4')).toBe('LB')
+    expect(keyLabel('Pad5')).toBe('RB')
+    expect(keyLabel('Pad7')).toBe('RT')
+    expect(keyLabel('Pad8')).toBe('View')
+    expect(keyLabel('Pad9')).toBe('Menu')
+    expect(keyLabel('Pad11')).toBe('RS')
+    expect(keyLabel('Pad12')).toBe('D-pad ↑')
+    expect(keyLabel('Pad15')).toBe('D-pad →')
+    expect(keyLabel('Pad16')).toBe('Pad 16')
+    expect(keyLabel('Pad20')).toBe('Pad 20')
+  })
+
   it("prefers the layout's own character", () => {
     const azerty = new Map([
       ['KeyQ', 'a'],
