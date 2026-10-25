@@ -7,11 +7,12 @@ interface FeelEventBase {
 
 /**
  * Moments of player feedback. `dir` is the dash direction (+1 right, -1 left); a collision is
- * reported by `playerId` and names the player it hit as `otherId`.
+ * reported by `playerId` and names the player it hit as `otherId`. A bounce is a launch off a pad,
+ * at the orb's x on the pad's top.
  */
 export type FeelEvent =
   | (FeelEventBase & { kind: 'dash'; dir: 1 | -1 })
-  | (FeelEventBase & { kind: 'stall' | 'flap' | 'recharge' })
+  | (FeelEventBase & { kind: 'stall' | 'flap' | 'recharge' | 'bounce' })
   | (FeelEventBase & { kind: 'collision'; otherId: string })
 
 export type FeelEventKind = FeelEvent['kind']

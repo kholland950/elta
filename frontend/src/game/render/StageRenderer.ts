@@ -17,8 +17,9 @@ const clipX = (r: Rect, x0: number, x1: number): Rect | undefined => {
 
 /**
  * Neon hard-light tunnels: dark rock with glowing cyan edges where it meets open space, a faint
- * tint inside tunnels and chambers so corridors read, magenta bounce pads, and the finish line
- * across the finish chamber. Drawn in vertical strips that are hidden when off camera.
+ * tint inside tunnels and chambers so corridors read, and the finish line across the finish
+ * chamber. Bounce pads are filled as plain rock with no edge lines; PadRenderer draws their glow
+ * over the top. Drawn in vertical strips that are hidden when off camera.
  */
 export class StageRenderer {
   private chunks: Array<{ x0: number; x1: number; graphics: Phaser.GameObjects.Graphics }> = []
@@ -46,22 +47,19 @@ export class StageRenderer {
       const c = clipX(r, x0, x1)
       if (c) g.fillRect(c.x, c.y, c.w, c.h)
     }
+    // Pads replace rock in the grid, so they get the rock fill too (or they'd be holes)
     g.fillStyle(STAGE_PALETTE.solidFill, STAGE_PALETTE.solidFillAlpha)
-    for (const r of stage.solids) {
-      const c = clipX(r, x0, x1)
-      if (c) g.fillRect(c.x, c.y, c.w, c.h)
-    }
-    g.fillStyle(STAGE_PALETTE.padFill, 1)
-    for (const r of stage.pads) {
+    for (const r of [...stage.solids, ...stage.pads]) {
       const c = clipX(r, x0, x1)
       if (c) g.fillRect(c.x, c.y, c.w, c.h)
     }
     for (const { width, alpha } of GLOW_PASSES) {
       for (const e of stage.edges) {
+        if (e.pad) continue
         const a = Math.max(Math.min(e.x0, e.x1), x0)
         const b = Math.min(Math.max(e.x0, e.x1), x1)
         if (b < a || (e.x0 === e.x1 && (e.x0 < x0 || e.x0 >= x1))) continue
-        g.lineStyle(width, e.pad ? STAGE_PALETTE.padEdge : STAGE_PALETTE.solidEdge, alpha)
+        g.lineStyle(width, STAGE_PALETTE.solidEdge, alpha)
         if (e.x0 === e.x1) g.lineBetween(e.x0, e.y0, e.x1, e.y1)
         else g.lineBetween(a, e.y0, b, e.y1)
       }

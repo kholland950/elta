@@ -80,6 +80,11 @@ const burstConfig: Phaser.Types.GameObjects.Particles.ParticleEmitterConfig = {
   emitting: false,
 }
 
+/** Where pad launches are drawn (PadRenderer): the flash, fountain and streak at a launch point. */
+export interface PadLaunchSink {
+  launch(x: number, y: number): void
+}
+
 /** Finds a player's visuals by id; undefined when the player has not joined yet or has left. */
 export type VisualsLookup = (playerId: string) => PlayerVisuals | undefined
 
@@ -102,6 +107,7 @@ export class EffectsDirector implements FeelSink {
   /** Idle wisp images, reused; at most MAX_WISPS are ever created. */
   private freeWisps: Array<Phaser.GameObjects.Image> = []
   private wispCount = 0
+  private padLaunch?: PadLaunchSink
 
   constructor(scene: Phaser.Scene, cameraFX: CameraFX, profile: QualityProfile) {
     this.scene = scene
@@ -121,6 +127,11 @@ export class EffectsDirector implements FeelSink {
   public setVisualsLookup(lookup: VisualsLookup, localId: string) {
     this.visualsFor = lookup
     this.localId = localId
+  }
+
+  /** Who draws pad launches for the current stage; cleared (undefined) when there is none. */
+  public setPadLaunch(sink?: PadLaunchSink) {
+    this.padLaunch = sink
   }
 
   public applyQuality(profile: QualityProfile) {
@@ -158,6 +169,10 @@ export class EffectsDirector implements FeelSink {
         break
       case 'recharge':
         visuals.pulse()
+        break
+      case 'bounce':
+        // On the pad where the launch happened, not under the orb as drawn (already above it)
+        this.padLaunch?.launch(e.x, e.y)
         break
       case 'collision':
         this.burst.explode(this.profile.burstCount, e.x, e.y)

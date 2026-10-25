@@ -6,6 +6,7 @@ const dash: FeelEvent = { kind: 'dash', playerId: 'a', x: 10, y: -20, dir: -1 }
 const stall: FeelEvent = { kind: 'stall', playerId: 'a', x: 1, y: 2 }
 const flap: FeelEvent = { kind: 'flap', playerId: 'a', x: 3, y: 4 }
 const recharge: FeelEvent = { kind: 'recharge', playerId: 'a', x: 5, y: 6 }
+const bounce: FeelEvent = { kind: 'bounce', playerId: 'a', x: 150, y: 400 }
 const collision = (playerId: string, otherId: string): FeelEvent => ({
   kind: 'collision',
   playerId,
@@ -15,8 +16,22 @@ const collision = (playerId: string, otherId: string): FeelEvent => ({
 })
 
 describe('action messages', () => {
-  it.each([dash, stall, flap, recharge, collision('a', 'b')])('round-trips a $kind event', (e) => {
-    expect(fromActionMessage(JSON.parse(JSON.stringify(toActionMessage(e))))).toEqual(e)
+  it.each([dash, stall, flap, recharge, bounce, collision('a', 'b')])(
+    'round-trips a $kind event',
+    (e) => {
+      expect(fromActionMessage(JSON.parse(JSON.stringify(toActionMessage(e))))).toEqual(e)
+    },
+  )
+
+  it('parses a relayed bounce with just the shared fields', () => {
+    expect(toActionMessage(bounce)).toEqual({ kind: 'bounce', playerId: 'a', x: 150, y: 400 })
+    expect(fromActionMessage({ playerId: 'b', kind: 'bounce', x: 20, y: -350 })).toEqual({
+      kind: 'bounce',
+      playerId: 'b',
+      x: 20,
+      y: -350,
+    })
+    expect(fromActionMessage({ playerId: 'b', kind: 'bounce', x: 20 })).toBeUndefined()
   })
 
   it('only carries dir on dash and otherId on collision', () => {
@@ -59,7 +74,7 @@ describe('action messages', () => {
 })
 
 describe('shouldBroadcast', () => {
-  it.each([dash, stall, flap, recharge])('broadcasts the local $kind', (e) => {
+  it.each([dash, stall, flap, recharge, bounce])('broadcasts the local $kind', (e) => {
     expect(shouldBroadcast(e, 'a')).toBe(true)
   })
 
