@@ -1,6 +1,7 @@
 import Phaser from 'phaser'
 import type { QualityProfile } from 'game/fx/quality'
 import type { Rect } from 'game/race/stage'
+import { parallaxCover, REPLAY_MIN_ZOOM } from 'game/fx/replayCamera'
 import { MAX_STAR_LAYERS, generateNebula, generateStarLayers, StarLayer } from 'game/fx/starfield'
 import { ensureGlowTexture, GLOW_TEXTURE } from 'game/render/textures'
 
@@ -10,7 +11,7 @@ const NEBULA_SCROLL = 0.08
 // Extra room around the parallax-scaled world so nebula still shows at the world edges
 const NEBULA_MARGIN = 2000
 // Star layers are sized to the parallax-scaled world plus a viewport this big, so any window up
-// to this size stays covered
+// to this size stays covered, down to the round-end replay's lowest zoom
 const MAX_VIEWPORT = 4096
 const BORDER_COLOR = 0x00e5ff
 const BORDER_PASSES = [
@@ -32,7 +33,9 @@ interface NebulaSprite {
  * An object with scroll factor `s` is drawn at `x - camera.scrollX * s`, anchored to the camera's
  * top-left. Nebula images are offset by `(viewport / 2) * (1 - s)` so the layer is centred on the
  * camera instead; the offset is recomputed on resize. Star layers tile, so they only need to cover
- * every camera position in the world: from `bounds * s` to `(bounds + size) * s + viewport`.
+ * every camera position and zoom in the world (see `parallaxCover`). The replay's follow cam lifts
+ * the camera bounds and zooms out to REPLAY_MIN_ZOOM, so that is the zoom they are sized for. The
+ * nebula needs nothing: its blobs are soft, so past them is just the black background.
  */
 export class BackgroundRenderer {
   private scene: Phaser.Scene
@@ -75,14 +78,9 @@ export class BackgroundRenderer {
       const key = `fx-stars-${index}`
       this.bakeStarTexture(key, layer)
       const s = layer.scrollFactor
+      const cover = parallaxCover(bounds, s, MAX_VIEWPORT, REPLAY_MIN_ZOOM)
       const sprite = this.scene.add
-        .tileSprite(
-          Math.floor(bounds.x * s),
-          Math.floor(bounds.y * s),
-          Math.ceil(bounds.w * s) + MAX_VIEWPORT,
-          Math.ceil(bounds.h * s) + MAX_VIEWPORT,
-          key,
-        )
+        .tileSprite(cover.x, cover.y, cover.w, cover.h, key)
         .setOrigin(0)
         .setScrollFactor(s)
         .setDepth(-20 + index)

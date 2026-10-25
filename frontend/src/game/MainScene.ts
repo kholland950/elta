@@ -9,6 +9,7 @@ import { loadQuality, QualityLevel, QualityProfile, qualityProfile } from 'game/
 import { type Bindings, loadBindings } from 'game/input/bindings'
 import { generateStage } from 'game/race/generateStage'
 import { lobbyRoom } from 'game/race/lobbyRoom'
+import { PathRecorder } from 'game/race/pathRecorder'
 import {
   canVoteSkip,
   hiddenRemoteIds,
@@ -30,6 +31,9 @@ import { CameraFX } from 'game/render/CameraFX'
 import { EffectsDirector } from 'game/render/EffectsDirector'
 import { EnergySea } from 'game/render/EnergySea'
 import { GateRenderer } from 'game/render/GateRenderer'
+import { PathRenderer } from 'game/render/PathRenderer'
+import { ReplayCamera } from 'game/render/ReplayCamera'
+import { ReplaySequence } from 'game/render/ReplaySequence'
 import { RoundEndFX } from 'game/render/RoundEndFX'
 import { StageRenderer } from 'game/render/StageRenderer'
 import { StageWorld } from 'game/stage/StageWorld'
@@ -76,6 +80,10 @@ export class MainScene extends Phaser.Scene {
   private stageRenderer?: StageRenderer
   private gateRenderer?: GateRenderer
   private sea?: EnergySea
+  /** Every player's route through the current race, for the round-end replay. */
+  private readonly recorder = new PathRecorder()
+  private paths: PathRenderer
+  private replay: ReplaySequence
   /** Subscribed from construction, so nothing sent before `create` is lost. */
   private readonly tracker?: MatchTracker
   /** Which stage is built (see `stageFor`). */
@@ -134,6 +142,18 @@ export class MainScene extends Phaser.Scene {
       () => this.playerManager.localSprite,
       () => this.playerManager.resetPilot(),
     )
+    this.paths = new PathRenderer(this)
+    const players = this.playerManager
+    this.replay = new ReplaySequence({
+      camera: new ReplayCamera(this, () => players.followLocal()),
+      paths: this.paths,
+      players: {
+        spriteFor: (id) => players.spriteFor(id),
+        tintOf: (id) => players.visualsFor(id)?.tint,
+        freezeRemote: (id, frozen) => players.freezeRemote(id, frozen),
+      },
+      director: this.raceDirector,
+    })
     const color = window.localStorage.getItem('color') || 'Blue'
     const name = window.localStorage.getItem('name') || 'no name'
     // Placed at its slot when the first stage is built
@@ -142,6 +162,9 @@ export class MainScene extends Phaser.Scene {
     // Every movement rule runs once per fixed physics step, after the step moved the bodies
     const onStep = () => {
       this.raceDirector.step()
+      // The body, not the sprite: within a frame of several steps the sprite only catches up after
+      const sprite = this.playerManager.localSprite
+      if (conn && sprite) this.recorder.record(this.localId, conn.serverNow(), sprite.body.center.x, sprite.body.center.y)
       // Everyone is held in their bay, so a late update can't pull a remote orb out of its own
       if (this.raceDirector.heldInBays) this.placeRemotes?.()
       this.stageWorld?.setGatesOpen(this.raceDirector.gatesOpen)
@@ -169,6 +192,7 @@ export class MainScene extends Phaser.Scene {
       for (const off of offs) off()
       this.tracker?.dispose()
       this.roundFX.destroy()
+      this.paths.destroy()
     })
   }
 
@@ -208,6 +232,8 @@ export class MainScene extends Phaser.Scene {
       conn.on('playerMove', (m) => {
         if (m.playerId !== this.localId) {
           this.playerManager.playerMoved(m.playerId, m.x, m.y, m.velocityX, m.velocityY)
+          // Stamped on arrival, so a remote line lags by about the latency
+          if (!this.playerManager.isHidden(m.playerId)) this.recorder.record(m.playerId, conn.serverNow(), m.x, m.y)
         }
       }),
       conn.on('playerAction', (m) => {
@@ -250,7 +276,8 @@ export class MainScene extends Phaser.Scene {
    *   match-over wait (see `hiddenRemoteIds`)
    * - the stage: the lobby room in the lobby (and once I have returned to it), else the current
    *   round's, rebuilt when it changes
-   * - the round's end: celebrate and disintegrate, once per round, on the race stage only
+   * - the round's end, once per round and on the race stage only: celebrate and disintegrate,
+   *   then the replay sequence (see ReplaySequence)
    */
   private sync(view: MatchView) {
     if (view.me && view.me !== this.localId) {
@@ -269,8 +296,10 @@ export class MainScene extends Phaser.Scene {
     if (choice.key !== this.stageKey) {
       this.stageKey = choice.key
       this.endShown = undefined
+      this.replay.cancel()
       this.roundFX.cancel()
       this.playerManager.freezeRemotes(false)
+      this.playerManager.setBumpsEnabled(true)
       for (const player of this.playerManager.allPresent()) this.roundFX.reform(player.visuals)
       if (choice.kind === 'race' && view.round && this.conn) {
         const stage = this.buildStage(generateStage(choice.seed, choice.difficulty, choice.bays, choice.archetype))
@@ -286,10 +315,21 @@ export class MainScene extends Phaser.Scene {
       this.endShown = ended.round
       this.raceDirector.end()
       this.playerManager.freezeRemotes(true)
+      // Until the next stage: the winner's lap mustn't knock the (invisible) losers about
+      this.playerManager.setBumpsEnabled(false)
       this.playerManager.allPresent().forEach((player) => {
         if (player.id === ended.winnerId) this.roundFX.celebrate(player.visuals)
         else this.roundFX.disintegrate(player.visuals)
       })
+      const conn = this.conn
+      if (conn && ended.reason !== 'skipped') {
+        // An older server sends no endedAt: the sequence runs from when the end arrived
+        const endedAt = ended.endedAt ?? conn.serverNow()
+        const paths = this.recorder.finalize(endedAt, ended.times)
+        const { finish } = this.stage
+        const finishAt = finish && { x: (finish.x + finish.right) / 2, y: (finish.top + finish.bottom) / 2 }
+        this.replay.start(ended, endedAt, this.stage.bounds, paths, this.localId, finishAt)
+      }
     }
   }
 
@@ -317,6 +357,7 @@ export class MainScene extends Phaser.Scene {
     }
     placeRemotes()
     this.placeRemotes = placeRemotes
+    this.recorder.begin(round.goAt)
     this.raceDirector.startRound(stage.finish, slot, planOf(round), () => conn.serverNow(), {
       onFinish: (raceMs) => {
         if (this.reportedRound === round.round) return
@@ -412,6 +453,7 @@ export class MainScene extends Phaser.Scene {
 
   public update(time: number, delta: number) {
     this.playerManager.update()
+    if (this.conn) this.replay.update(this.conn.serverNow())
     this.gateRenderer?.update(time, delta, this.raceDirector.gatesOpen)
   }
 }

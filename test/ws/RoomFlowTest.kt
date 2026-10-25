@@ -16,7 +16,7 @@ import kotlin.test.*
 class RoomFlowTest {
     private val timings = Timings(
         exploreLeadMs = 50, exploreMs = 100, goDelayMs = 100,
-        finishWindowMs = 60, resultsMs = 300, matchOverMs = 5_000, roundTimeoutMs = 120_000,
+        finishWindowMs = 60, resultsMs = 300, replayFinishMs = 0, replayTimeoutMs = 0, replaySpeed = 1_000_000, matchOverMs = 5_000, roundTimeoutMs = 120_000,
     )
 
     private fun ApplicationTestBuilder.boot(reconnectGraceMs: Long = 30_000) {

@@ -63,6 +63,13 @@ export interface RoundEndMessage {
   reason: RoundEndReason
   times: { playerId: string; raceTimeMs: number }[]
   wins: Record<string, number>
+  /** Server time the round ended; the replay sequence runs from it. Absent from older servers. */
+  endedAt?: number
+  /**
+   * Length of the trail-replay beat: the race (GO to `endedAt`) at 2×, 0 when skipped. Absent from
+   * older servers.
+   */
+  replayMs?: number
   nextRoundAt: number | null
   matchWinnerId: string | null
 }

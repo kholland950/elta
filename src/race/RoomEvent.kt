@@ -17,6 +17,9 @@ sealed interface RoomEvent {
         val reason: EndReason,
         val times: List<Report>,
         val wins: Map<String, Int>,
+        val endedAt: Long,
+        /** Length of the clients' trail replay beat. */
+        val replayMs: Long,
         val nextRoundAt: Long?,
         val matchWinnerId: String?,
     ) : RoomEvent

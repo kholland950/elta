@@ -35,7 +35,8 @@ export class Countdown {
     let label = ''
     if (phase.kind === 'countdown') label = String(phase.digit)
     // sinceGoMs stops counting when the round ends, so an early finish would freeze "GO!" on screen
-    else if (phase.kind === 'race' && view.mode !== 'ended' && view.sinceGoMs !== undefined && view.sinceGoMs < GO_SHOW_MS) label = 'GO!'
+    // through the end and the victory lap
+    else if (phase.kind === 'race' && view.mode !== 'ended' && view.mode !== 'victory' && view.sinceGoMs !== undefined && view.sinceGoMs < GO_SHOW_MS) label = 'GO!'
     if (label === this.shown) return
     this.shown = label
     this.text.setText(label)
