@@ -20,8 +20,9 @@ import type { PhysicsSprite } from './render/PlayerVisuals'
  * - `free`: free roam with no clock (the lobby sandbox)
  * - `round`: a server round, phases from the server clock
  * - `ended`: the round is over; the orb is held where it was
+ * - `victory`: the winner's lap after the round: free to fly, and nothing is timed or counted
  */
-export type DirectorMode = 'solo' | 'free' | 'round' | 'ended'
+export type DirectorMode = 'solo' | 'free' | 'round' | 'ended' | 'victory'
 
 /** What the HUD shows about the round. */
 export interface RaceView {
@@ -73,6 +74,11 @@ export class RaceDirector {
   private pending?: Point
   /** Where the orb is held after the round ended. */
   private holdAt?: Point
+  /**
+   * Where the victory lap started (the winner's finish position); kept for the respawn rule
+   * hazards will need, which nothing triggers yet.
+   */
+  private lapSpawn?: Point
   private callbacks?: RoundCallbacks
 
   constructor(
@@ -119,8 +125,35 @@ export class RaceDirector {
     this.mode = 'ended'
     // A round skipped before GO drops its countdown; one ended in the race keeps its clock frozen
     if (this.phase.kind !== 'race') this.phase = FREE
+    this.holdHere()
+  }
+
+  /**
+   * The winner's victory lap: the orb flies free from where it is held, with no clock and no
+   * finish. Only from `ended`; presses latched while held are dropped first.
+   */
+  public startVictoryLap() {
+    if (this.mode !== 'ended') return
+    this.mode = 'victory'
+    this.lapSpawn = this.holdAt
+    this.onHold()
+  }
+
+  /** The lap is over: back to `ended`, holding the orb wherever the lap left it. */
+  public endVictoryLap() {
+    if (this.mode !== 'victory') return
+    this.mode = 'ended'
+    this.holdHere()
+  }
+
+  private holdHere() {
     const sprite = this.localSprite()
     this.holdAt = sprite ? { x: sprite.body.center.x, y: sprite.body.center.y } : undefined
+  }
+
+  /** Where the last victory lap started, if one has. */
+  public get victorySpawn(): Point | undefined {
+    return this.lapSpawn
   }
 
   private reset(mode: DirectorMode, gate: FinishGate | undefined, slot: Point) {
@@ -137,14 +170,16 @@ export class RaceDirector {
     this.gates = mode === 'free'
     this.pending = undefined
     this.holdAt = undefined
+    this.lapSpawn = undefined
     this.callbacks = undefined
   }
 
   /**
    * True while inputs are ignored: the wait before a server round's explore, the snap, the
-   * countdown, and after the round ended.
+   * countdown, and after the round ended (except for the winner's victory lap).
    */
   public get locked(): boolean {
+    if (this.mode === 'victory') return false
     return this.mode === 'ended' || controlsLocked(this.phase) || this.waitingInBay()
   }
 
@@ -169,6 +204,8 @@ export class RaceDirector {
   /** Runs once per physics step, after the step moved bodies and before player input applies. */
   public step() {
     const sprite = this.localSprite()
+    // The lap neither counts steps (the shown time stays frozen) nor looks for the finish
+    if (this.mode === 'victory') return
     if (this.mode === 'ended') {
       // The step count stops too, so the shown race time freezes
       if (sprite && this.holdAt) this.hold(sprite, this.holdAt)

@@ -33,7 +33,7 @@ Every frame is JSON `{"event": string, "data": object}`. Times are **server epoc
 | `playerLeft` | `{playerId}` | Sent to the rest of the room when a player leaves (a clean close, or a held seat running out; §7), before the `roomState` that follows. |
 | `roundStart` | `{round, seed, difficulty, startOrder: [playerId], exploreAt, snapAt, goAt}` | Sent to everyone at the start of each round. `round` counts from 1 within a match. |
 | `skipVotes` | `{round, votes, needed}` | Sent to everyone whenever the vote count or `needed` changes during a round. |
-| `roundEnd` | `{round, winnerId: string\|null, reason: "finish"\|"timeout"\|"skipped", times: [{playerId, raceTimeMs}], wins: {[playerId]: number}, nextRoundAt: number\|null, matchWinnerId: string\|null}` | Sent to everyone. `times` holds the reports the server accepted, sorted by time. On match end, `matchWinnerId` is set and `nextRoundAt` is `null`. |
+| `roundEnd` | `{round, winnerId: string\|null, reason: "finish"\|"timeout"\|"skipped", times: [{playerId, raceTimeMs}], wins: {[playerId]: number}, endedAt: number, replayMs: number, nextRoundAt: number\|null, matchWinnerId: string\|null}` | Sent to everyone. `endedAt` is the server time the round ended; clients run the replay sequence from it ([round-replay.md](round-replay.md)). `replayMs` is the trail replay beat: `(endedAt − goAt) / 2`, or `0` when skipped. `times` holds the reports the server accepted, sorted by time. On match end, `matchWinnerId` is set and `nextRoundAt` is `null`. |
 
 ## 2. Server rules (kotlin; also what the frontend can rely on)
 - **Rooms:**
@@ -61,7 +61,7 @@ Every frame is JSON `{"event": string, "data": object}`. Times are **server epoc
   - A player leaving recomputes both `needed` and the votes, and can trigger the skip.
 - **After `roundEnd`:**
   - If `wins[winner] == winsToMatch`, the match is over. After `5000` ms the phase returns to `"lobby"`, wins reset to 0, and `roomState` is sent.
-  - Otherwise the next `roundStart` comes at `nextRoundAt = endAt + 5000`.
+  - Otherwise the next `roundStart` comes at `nextRoundAt = endedAt + fixed + replayMs + 3000`, where fixed is `7300` for `finish`, `2500` for `timeout` and `0` for `skipped`.
 - **Last player leaves mid-match:** the room is deleted.
 
 ## 3. Client race clock (phaser ⇄ frontend)

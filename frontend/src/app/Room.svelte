@@ -4,6 +4,7 @@
   import { startGame } from 'game/Game'
   import { RoomConnection } from 'game/net/RoomConnection'
   import { initialSession, meReturned } from 'game/race/session'
+  import { resultsShownAt } from 'game/race/replayTimeline'
   import { navigate } from 'svelte-routing'
   import events from './events'
   import { createRoomStore } from './roomStore'
@@ -102,13 +103,27 @@
 
   onDestroy(() => events.remove('showScoreboard'))
 
+  // The results panel waits out the round-end replay, which runs on the server clock
+  let now = 0
+  const clock = setInterval(() => (now = conn ? conn.serverNow() : 0), 250)
+  onDestroy(() => clearInterval(clock))
+  let seenEnd = null
+  let receivedAt = 0
+  $: if ($session.lastRoundEnd !== seenEnd) {
+    seenEnd = $session.lastRoundEnd
+    receivedAt = conn ? conn.serverNow() : 0
+    now = receivedAt
+  }
+  $: replayDone = seenEnd !== null && now >= resultsShownAt(seenEnd, receivedAt)
+
   const rejoin = (event) => {
     event.currentTarget.blur()
     window.location.reload()
   }
 
   $: inLobby = meReturned($session) && $session.me !== null && !$session.rejected
-  $: inResults = $session.phase === 'match' && $session.lastRoundEnd !== null && !meReturned($session) && !$session.rejected
+  $: inResults =
+    $session.phase === 'match' && $session.lastRoundEnd !== null && replayDone && !meReturned($session) && !$session.rejected
 </script>
 
 <!-- Right click can be bound to an action, so the browser's menu never opens over the game -->

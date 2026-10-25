@@ -134,6 +134,8 @@ data class RoundEndDto(
     val reason: String,
     val times: List<TimeDto>,
     val wins: Map<String, Int>,
+    val endedAt: Long,
+    val replayMs: Long,
     val nextRoundAt: Long?,
     val matchWinnerId: String?,
 )
@@ -184,6 +186,8 @@ fun RoomEvent.toFrame(): String = when (this) {
             },
             times = times.map { TimeDto(it.playerId, it.raceTimeMs) },
             wins = wins,
+            endedAt = endedAt,
+            replayMs = replayMs,
             nextRoundAt = nextRoundAt,
             matchWinnerId = matchWinnerId,
         ),

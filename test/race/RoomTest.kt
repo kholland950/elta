@@ -230,10 +230,12 @@ class RoomTest {
         assertEquals(EndReason.Finish, end.reason)
         assertEquals(listOf("b", "a"), end.times.map { it.playerId })
         assertEquals(mapOf("a" to 0, "b" to 1), end.wins)
-        assertEquals(GO_AT + 1150 + 5000, end.nextRoundAt)
+        assertEquals(GO_AT + 1150, end.endedAt)
+        assertEquals(575, end.replayMs) // 1150 ms of race at 2x
+        assertEquals(GO_AT + 1150 + 7_300 + 575 + 3_000, end.nextRoundAt)
         assertNull(end.matchWinnerId)
         assertEquals(1, step.room.players.first { it.id == "b" }.wins)
-        assertEquals(GO_AT + 6150, step.wakeAt)
+        assertEquals(GO_AT + 1150 + 10_875, step.wakeAt)
     }
 
     @Test
@@ -264,7 +266,9 @@ class RoomTest {
         assertEquals(EndReason.Timeout, end.reason)
         assertNull(end.winnerId)
         assertTrue(end.times.isEmpty())
-        assertEquals(GO_AT + 125_000, end.nextRoundAt)
+        assertEquals(GO_AT + 120_000, end.endedAt)
+        assertEquals(60_000, end.replayMs)
+        assertEquals(GO_AT + 120_000 + 2_500 + 60_000 + 3_000, end.nextRoundAt)
         assertEquals(1, step.events.size) // no wins changed, so no roomState
     }
 
@@ -304,8 +308,10 @@ class RoomTest {
         val end = step.events[1] as RoomEvent.RoundEnded
         assertEquals(EndReason.Skipped, end.reason)
         assertNull(end.winnerId)
-        assertEquals(5200, end.nextRoundAt)
-        assertEquals(5200, step.wakeAt)
+        assertEquals(200, end.endedAt)
+        assertEquals(0, end.replayMs)
+        assertEquals(3200, end.nextRoundAt)
+        assertEquals(3200, step.wakeAt)
     }
 
     @Test

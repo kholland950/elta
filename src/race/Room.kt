@@ -202,7 +202,11 @@ data class Room(
     ): Pair<Room, List<RoomEvent>> {
         val scored = if (winnerId == null) players else players.map { if (it.id == winnerId) it.copy(wins = it.wins + 1) else it }
         val over = winnerId != null && Match.isOver(scored.first { it.id == winnerId }.wins, settings.winsToMatch)
-        val at = now + (if (over) env.timings.matchOverMs else env.timings.resultsMs)
+        val t = env.timings
+        val raceMs = now - p.plan.goAt
+        // The match-over wait never cuts the last round's replay short
+        val wait = t.resultsWaitMs(reason, raceMs)
+        val at = now + (if (over) maxOf(t.matchOverMs, wait) else wait)
         val next = copy(players = scored, phase = if (over) Phase.MatchOver(at) else Phase.Results(at))
         val ended = RoomEvent.RoundEnded(
             round = p.plan.round,
@@ -210,6 +214,8 @@ data class Room(
             reason = reason,
             times = PhotoFinish.ranked(p.reports),
             wins = scored.associate { it.id to it.wins },
+            endedAt = now,
+            replayMs = t.trailReplayMs(reason, raceMs),
             nextRoundAt = if (over) null else at,
             matchWinnerId = if (over) winnerId else null,
         )

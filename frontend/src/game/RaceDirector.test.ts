@@ -210,3 +210,82 @@ describe('RaceDirector solo', () => {
     expect(director.view().phase.kind).toBe('race')
   })
 })
+
+describe('RaceDirector victory lap', () => {
+  /** A round raced to the finish and ended, with the orb past the line. */
+  const ended = () => {
+    const s = setup()
+    s.setNow(19500)
+    s.director.step() // GO
+    s.body.moveTo(990, 300)
+    s.director.step()
+    s.body.moveTo(1010, 300)
+    s.director.step()
+    s.body.moveTo(1200, 280)
+    s.director.end()
+    return s
+  }
+
+  it('is ignored unless the round has ended', () => {
+    const { director, setNow } = setup()
+    director.startVictoryLap()
+    expect(director.currentMode).toBe('round')
+    setNow(19500)
+    director.step()
+    director.startVictoryLap()
+    expect(director.currentMode).toBe('round')
+    director.endVictoryLap()
+    expect(director.currentMode).toBe('round')
+  })
+
+  it('frees the orb from where it was held and drops latched presses', () => {
+    const { director, body, onHold } = ended()
+    director.step()
+    onHold.mockClear()
+    director.startVictoryLap()
+    expect(director.currentMode).toBe('victory')
+    expect(director.view().mode).toBe('victory')
+    expect(director.locked).toBe(false)
+    expect(onHold).toHaveBeenCalledTimes(1)
+    expect(director.victorySpawn).toEqual({ x: 1200, y: 280 })
+    body.moveTo(1500, 100)
+    director.step()
+    expect(body.center).toEqual({ x: 1500, y: 100 })
+  })
+
+  it('neither counts the race time nor reports another finish during the lap', () => {
+    const { director, body, onFinish } = ended()
+    const shown = director.view().raceMs
+    director.startVictoryLap()
+    // Back across the line and over it again
+    body.moveTo(900, 300)
+    director.step()
+    body.moveTo(1100, 300)
+    director.step()
+    for (let i = 0; i < 100; i++) director.step()
+    expect(onFinish).toHaveBeenCalledTimes(1)
+    expect(director.view().raceMs).toBe(shown)
+    expect(director.view().finishedMs).toBe(shown)
+  })
+
+  it('holds the orb where the lap left it once the lap ends', () => {
+    const { director, body } = ended()
+    director.startVictoryLap()
+    body.moveTo(1400, 120)
+    director.step()
+    director.endVictoryLap()
+    expect(director.currentMode).toBe('ended')
+    expect(director.locked).toBe(true)
+    body.moveTo(1450, 160)
+    director.step()
+    expect(body.center).toEqual({ x: 1400, y: 120 })
+  })
+
+  it('is cleared by the next round', () => {
+    const { director } = ended()
+    director.startVictoryLap()
+    director.startRound(gate, slot, plan, () => 0, { onFinish: vi.fn(), onSnap: vi.fn(), onExplore: vi.fn() })
+    expect(director.currentMode).toBe('round')
+    expect(director.victorySpawn).toBeUndefined()
+  })
+})

@@ -30,6 +30,9 @@ export interface MoveSink {
   sendMove(m: Omit<PlayerMoveMessage, 'playerId'>): void
 }
 
+/** How far the camera closes on the orb it follows each frame. */
+export const FOLLOW_LERP = 0.2
+
 /** Velocity change (px/s) too small to send on its own. */
 const SAME_VELOCITY = 1
 
@@ -67,6 +70,8 @@ export class PlayerManager {
   private mouseEnabled = true
   private pilot: PilotState = freshPilot()
   private bumps = new BumpCooldowns()
+  /** Off from a round's end until the next stage, so a lapping winner can't bump the losers. */
+  private bumpsEnabled = true
   /** Physics steps run since the scene started; the clock for bump cooldowns. */
   private steps = 0
   /** The last position and velocity sent; NaN means send on the next tick whatever it is. */
@@ -142,7 +147,7 @@ export class PlayerManager {
 
   private addLocalPlayer(player: Player) {
     this.localPlayer = player
-    this.scene.cameras.main.startFollow(this.localPlayer.sprite, false, 0.2, 0.2)
+    this.followLocal()
     const moves = this.moves
     if (moves) {
       this.scene.time.addEvent({
@@ -182,6 +187,23 @@ export class PlayerManager {
     this.scene.physics.add.overlap(player.sprite, this.remoteGroup, (_local, other) =>
       this.bumped(other as PhysicsSprite),
     )
+  }
+
+  /** Puts the camera back on the local orb (after the round-end replay followed someone else). */
+  public followLocal() {
+    if (this.localPlayer) this.scene.cameras.main.startFollow(this.localPlayer.sprite, false, FOLLOW_LERP, FOLLOW_LERP)
+  }
+
+  /** Bumps between the local orb and remote ones; off while a round's end plays out. */
+  public setBumpsEnabled(enabled: boolean) {
+    this.bumpsEnabled = enabled
+  }
+
+  /** The physics sprite (camera target) of the local or a placed remote player. */
+  public spriteFor(id: string): PhysicsSprite | undefined {
+    if (this.localPlayer?.id === id) return this.localPlayer.sprite
+    const remote = this.remotePlayers.find((player) => player.id === id)
+    return remote?.placed ? remote.sprite : undefined
   }
 
   /** The local player's sprite, once it exists. */
@@ -242,7 +264,7 @@ export class PlayerManager {
   private bumped(other: PhysicsSprite) {
     const remote = this.remotePlayers.find((player) => player.sprite === other)
     const local = this.localPlayer
-    if (!remote || !local) return
+    if (!remote || !local || !this.bumpsEnabled) return
     if (!this.bumps.tryBump(remote.id, this.steps * STEP_MS)) return
     const v = bumpVelocity(
       { id: local.id, x: local.sprite.body.center.x, y: local.sprite.body.center.y },
@@ -442,10 +464,18 @@ export class PlayerManager {
    * are frozen too), or lets them move again.
    */
   public freezeRemotes(frozen: boolean) {
-    this.remotePlayers.forEach((player) => {
-      player.sprite.body.moves = !frozen
-      if (frozen) player.sprite.body.stop()
-    })
+    this.remotePlayers.forEach((player) => this.freeze(player, frozen))
+  }
+
+  /** One remote orb, as `freezeRemotes`: a remote winner moves again for its victory lap. */
+  public freezeRemote(id: string, frozen: boolean) {
+    const player = this.remotePlayers.find((p) => p.id === id)
+    if (player) this.freeze(player, frozen)
+  }
+
+  private freeze(player: Player, frozen: boolean) {
+    player.sprite.body.moves = !frozen
+    if (frozen) player.sprite.body.stop()
   }
 
   /** The local and every placed remote player, for end-of-round effects. */
