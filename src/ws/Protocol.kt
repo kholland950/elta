@@ -152,6 +152,10 @@ data class RoundEndDto(
 @Serializable
 data class ChatMessageDto(val playerId: String, val text: String, val quick: Boolean)
 
+/** To the sender only: they went over the chat limit and are muted for [ms]. */
+@Serializable
+data class ChatMutedDto(val ms: Long)
+
 inline fun <reified T> frame(event: String, data: T): String =
     frame(event, wireJson.encodeToJsonElement(data))
 

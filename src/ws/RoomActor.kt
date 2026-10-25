@@ -2,6 +2,7 @@ package com.kholland.ws
 
 import com.kholland.chat.Chat
 import com.kholland.chat.ChatThrottle
+import com.kholland.chat.ChatVerdict
 import com.kholland.race.JoinOutcome
 import com.kholland.race.JoinRejection
 import com.kholland.race.Phase
@@ -230,9 +231,14 @@ class RoomActor(
 
     /** To everyone, the sender included, so all clients see the same order. */
     private fun chat(id: String, message: ChatMessageDto, now: Long) {
-        if (!chatThrottle.allow(id, now)) return
-        val text = frame("chatMessage", message)
-        seats.values.forEach { it.out?.trySend(text) }
+        when (chatThrottle.check(id, now)) {
+            ChatVerdict.Allowed -> {
+                val text = frame("chatMessage", message)
+                seats.values.forEach { it.out?.trySend(text) }
+            }
+            ChatVerdict.Muted -> seats[id]?.out?.trySend(frame("chatMuted", ChatMutedDto(Chat.MUTE_MS)))
+            ChatVerdict.Dropped -> Unit
+        }
     }
 
     private fun removeSeat(id: String, seat: Seat, why: String, now: Long) {

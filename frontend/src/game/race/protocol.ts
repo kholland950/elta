@@ -96,6 +96,8 @@ export interface ServerMessages {
   playerAction: PlayerActionMessage
   /** Sent to everyone, the sender included. For a quick chat `text` is the line id. */
   chatMessage: { playerId: string; text: string; quick: boolean }
+  /** To the sender only: over the chat limit, so muted for `ms`. */
+  chatMuted: { ms: number }
 }
 
 export type ClientEvent = keyof ClientMessages

@@ -7,6 +7,8 @@ export interface ChatEntry {
   color: string
   text: string
   quick: boolean
+  /** From the game, not a player: shown without a sender. */
+  system: boolean
   /** Local time it arrived, in ms. */
   at: number
 }

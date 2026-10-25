@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { appendEntry, FADE_MS, MAX_ENTRIES, SHOW_MS, visibleEntries, type ChatEntry } from './chatLog'
 
 const entry = (key: number, at = 0): ChatEntry => ({
-  key, playerId: 'p', name: 'Ann', color: '#fff', text: `m${key}`, quick: false, at,
+  key, playerId: 'p', name: 'Ann', color: '#fff', text: `m${key}`, quick: false, system: false, at,
 })
 
 describe('chatLog', () => {

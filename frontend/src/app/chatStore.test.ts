@@ -30,6 +30,13 @@ describe('createChatStore', () => {
     conn.close()
   })
 
+  it('tells me I was muted, with no sender', () => {
+    const { conn, store, push } = setup()
+    push('chatMuted', { ms: 3000 })
+    expect(get(store).map((e) => [e.name, e.text, e.system])).toEqual([['', 'Chat disabled for 3 seconds', true]])
+    conn.close()
+  })
+
   it('drops quick chats it has no line for', () => {
     const { conn, store, push } = setup()
     push('chatMessage', { playerId: 'a', text: 'newLine', quick: true })

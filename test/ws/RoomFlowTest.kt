@@ -187,14 +187,20 @@ class RoomFlowTest {
     }
 
     @Test
-    fun chatIsThrottledPerPlayer() = testApplication {
+    fun chatOverTheLimitMutesTheSenderAndTellsOnlyThem() = testApplication {
         boot()
         val a = connect("roomspam", "alice")
+        val b = connect("roomspam", "bob")
         a.until("roomState")
-        repeat(7) { a.send("chat", buildJsonObject { put("text", "m$it") }) }
+        while (a.until("roomState").getValue("players").jsonArray.size < 2) Unit
+        b.until("roomState")
+        repeat(8) { a.send("chat", buildJsonObject { put("text", "m$it") }) }
         repeat(5) { assertEquals("m$it", a.until("chatMessage").str("text")) }
-        a.expectSilence()
-        a.session.close()
+        assertEquals(3_000, a.until("chatMuted").long("ms"))
+        a.expectSilence() // one notice per mute, and the rest dropped
+        repeat(5) { assertEquals("m$it", b.until("chatMessage").str("text")) }
+        b.expectSilence()
+        listOf(a, b).forEach { it.session.close() }
     }
 
     @Test

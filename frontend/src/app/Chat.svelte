@@ -74,8 +74,8 @@
 <div class="chat" class:open>
   <ul class="log" aria-live="polite">
     {#each lines as { entry, alpha } (entry.key)}
-      <li style="opacity: {alpha}" class:quick={entry.quick}>
-        <span class="name" style="color: {entry.color}">{entry.name}:</span>
+      <li style="opacity: {alpha}" class:quick={entry.quick} class:system={entry.system}>
+        {#if !entry.system}<span class="name" style="color: {entry.color}">{entry.name}:</span>{/if}
         {entry.text}
       </li>
     {/each}
@@ -140,6 +140,10 @@
   .quick {
     font-style: italic;
     color: #f4ff6b;
+  }
+
+  .system {
+    color: #9aa3b5;
   }
 
   .name {

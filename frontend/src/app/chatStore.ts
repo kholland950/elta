@@ -14,6 +14,10 @@ export const createChatStore = (conn: RoomConnection, now: () => number = () => 
   // Kept after a player leaves, so their last lines keep their name
   const roster = new Map<string, { name: string; color: string }>()
   const subscribers = new Set<(log: ChatEntry[]) => void>()
+  const add = (entry: Omit<ChatEntry, 'key' | 'at'>) => {
+    log = appendEntry(log, { ...entry, key: nextKey++, at: now() })
+    subscribers.forEach((fn) => fn(log))
+  }
 
   // conn.close() clears listeners, so no explicit unsubscribe is needed
   conn.on('roomState', (s) => {
@@ -23,8 +27,11 @@ export const createChatStore = (conn: RoomConnection, now: () => number = () => 
     if (m.quick && !isQuickLineId(m.text)) return
     const who = roster.get(m.playerId) ?? { name: '?', color: '#ffffff' }
     const text = m.quick && isQuickLineId(m.text) ? QUICK_TEXT[m.text] : m.text
-    log = appendEntry(log, { key: nextKey++, playerId: m.playerId, ...who, text, quick: m.quick, at: now() })
-    subscribers.forEach((fn) => fn(log))
+    add({ playerId: m.playerId, ...who, text, quick: m.quick, system: false })
+  })
+  conn.on('chatMuted', ({ ms }) => {
+    const seconds = Math.ceil(ms / 1000)
+    add({ playerId: '', name: '', color: '', text: `Chat disabled for ${seconds} second${seconds === 1 ? '' : 's'}`, quick: false, system: true })
   })
 
   return {
