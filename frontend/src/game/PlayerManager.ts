@@ -207,6 +207,13 @@ export class PlayerManager {
     this.clearLatches()
   }
 
+  /** Drops held keys and pending presses, e.g. when a menu takes the keyboard. */
+  public releaseInput() {
+    this.scene.input.keyboard?.resetKeys()
+    this.clearLatches()
+    this.scene.events.emit('closeScoreboard')
+  }
+
   private clearLatches() {
     this.latches = { flap: false, dash: false, stall: false }
   }
